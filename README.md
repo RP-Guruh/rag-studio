@@ -1,8 +1,8 @@
 # RAG Studio
 
-Aplikasi **desktop** untuk membuat, mengelola, dan menguji project **RAG (Retrieval-Augmented Generation)**. Setiap project bersifat terisolasi: ia memiliki kumpulan dokumen (knowledge base) dan persona AI sendiri-sendiri. Pengguna membawa sendiri penyedia chat model, embedding model, database PostgreSQL, dan mesin parsing dokumen (Docling) melalui halaman Settings.
+RAG Studio adalah aplikasi desktop untuk menyiapkan project RAG. Tiap project punya dokumen dan persona sendiri, jadi knowledge base satu project tidak tercampur dengan project lain. Model chat, model embedding, PostgreSQL, dan Docling diisi lewat halaman Settings.
 
-> Status saat ini: aplikasi dapat berjalan, konfigurasi tersimpan, project/dokumen tersimpan di PostgreSQL, dan dokumen dapat diproses menjadi chunk melalui Docling. Playground serta tahap embedding/penjawaban masih berupa mock. Lihat [Status implementasi](#status-implementasi).
+Saat ini konfigurasi, project, dokumen, dan chunking sudah berjalan. Playground dan tahap embedding belum terhubung; keduanya masih memakai data contoh. Rinciannya ada di [Status implementasi](#status-implementasi).
 
 ## Daftar isi
 
@@ -21,42 +21,44 @@ Aplikasi **desktop** untuk membuat, mengelola, dan menguji project **RAG (Retrie
 
 ## Tujuan aplikasi
 
-- Memungkinkan pembuatan **beberapa project RAG yang terpisah** dalam satu aplikasi desktop, tanpa saling mencampur data.
-- Memisahkan **pengetahuan** (dokumen yang diunggah) dari **perilaku asisten** (persona: nama, peran, instruksi/system prompt, nada, bahasa jawaban, serta opsi "jawab hanya dari knowledge").
-- Memberi pengguna kendali penuh atas **model dan infrastruktur** yang dipakai: chat model, embedding model, PostgreSQL + pgvector, dan Docling — bukan terikat pada satu vendor.
-- Menyediakan **Playground** untuk mencoba project dan melihat apakah persona serta knowledge base berperilaku sesuai harapan sebelum dipakai lebih lanjut.
-- Menyimpan konfigurasi lokal dengan aman (rahasia tidak disimpan sebagai teks biasa di database).
+Tiap project menyimpan dokumen dan persona sendiri. Persona berisi nama, peran, instruksi (system prompt), nada, bahasa jawaban, dan opsi untuk menjawab hanya dari dokumen yang ada.
+
+Model dan layanan dipilih lewat Settings: chat model, embedding model, PostgreSQL + pgvector, dan Docling. Aplikasi tidak mengikat ke penyedia tertentu.
+
+Playground dipakai untuk mencoba project. Isinya masih data contoh.
+
+Konfigurasi lokal ada di SQLite. Kunci API dan password tidak disimpan di sana.
 
 ## Status implementasi
 
 | Fitur | Status | Keterangan |
 | --- | --- | --- |
-| Settings (Chat model, Embedding model, Database, Document processing) | ✅ Terhubung | Disimpan di SQLite; password/API key di OS keyring; tiap kolom punya *Test connection*. |
-| Migrasi skema PostgreSQL | ✅ Otomatis | Dijalankan saat Database disimpan; butuh `vectorDimension` dari Embedding model. |
-| Login | ⚠️ Mock | Tombol "Continue as guest" berfungsi; sign-in dinonaktifkan. |
-| Project (buat, ubah, hapus, daftar) | ✅ Terhubung | Tersimpan di tabel `projects` PostgreSQL. |
-| Persona per project | ✅ Terhubung | Tersimpan di tabel `project_personas` (1:1). |
-| Upload dokumen (PDF, MD, TXT, DOC, DOCX; maks. 50 MB) | ✅ Terhubung | Byte file disimpan lokal, metadata di tabel `documents`; dedup via SHA-256. |
-| Training / chunking via Docling | ✅ Terhubung | Pipeline `pending → processing → chunked`; progres dikirim lewat event Wails. |
-| Embedding & penyimpanan vektor | ⚠️ Belum ada | Kolom `chunks.embedding vector(N)` dan indeks HNSW sudah disiapkan, tetapi pipeline belum mengisi embedding. |
-| Playground (chat + sources + retrieved chunks) | ⚠️ Mock | Berjalan dari `frontend/src/mock/data.ts`; belum memakai retrieval pgvector maupun chat model. |
+| Settings (Chat model, Embedding model, Database, Document processing) | Sudah | Disimpan di SQLite, kunci API dan password di keyring. Tiap bagian punya tombol Test connection. |
+| Migrasi skema PostgreSQL | Sudah | Jalan saat Database disimpan. Butuh vector dimension dari Embedding model. |
+| Login | Sebagian | Continue as guest berfungsi. Sign-in dinonaktifkan. |
+| Project (buat, ubah, hapus, daftar) | Sudah | Tersimpan di tabel `projects`. |
+| Persona per project | Sudah | Tersimpan di tabel `project_personas` (1:1). |
+| Upload dokumen (PDF, MD, TXT, DOC, DOCX; maks. 50 MB) | Sudah | File disimpan lokal, metadata di tabel `documents`. Dedup memakai SHA-256. |
+| Training / chunking via Docling | Sudah | Status `pending → processing → chunked`. Progres lewat event Wails. |
+| Embedding dan penyimpanan vektor | Belum | Kolom `chunks.embedding vector(N)` dan indeks HNSW sudah ada, tapi pipeline belum mengisinya. |
+| Playground (chat, sources, retrieved chunks) | Sebagian | Berjalan dari `frontend/src/mock/data.ts`. Belum memakai pgvector atau chat model. |
 
 ## Stack teknologi
 
 | Lapisan | Teknologi | Fungsi |
 | --- | --- | --- |
-| Shell desktop | **Wails v3** (`github.com/wailsapp/wails/v3`) | Menjalankan Go + webview desktop, embed `frontend/dist`, event bridge. |
-| Backend | **Go 1.26** | Service layer, domain, persistensi, pipeline training. |
-| Frontend | **Vue 3** (`<script setup lang="ts">`), **TypeScript**, **Vite** | Antarmuka pengguna. |
-| Routing | **vue-router** (hash history) | Navigasi Login → Dashboard → Project → Playground → Settings. |
-| Styling | CSS vanilla + design tokens (`tokens.css`, `base.css`) | Tidak memakai UI kit. |
-| Konfigurasi lokal | **SQLite** (`modernc.org/sqlite`) | `settings.db` di UserConfigDir. |
-| Rahasia | **OS Keyring** (`zalando/go-keyring`) + encrypted file fallback | API key dan password database. |
-| Penyimpanan RAG | **PostgreSQL + pgvector** (`jackc/pgx/v5`) | Project, persona, dokumen, chunk, pencarian vektor HNSW. |
-| Parsing dokumen | **Docling** (`github.com/miku/doclingclient`) | Mode `local` (CLI) atau `serve` (docling-serve) dengan *hybrid chunker*. |
-| Identitas | **google/uuid** | Primary key UUID. |
-| Task runner | **Task** (`Taskfile.yml`) | Dev, build, package, regenerate bindings. |
-| Package manager | **npm** | Dependency frontend. |
+| Shell desktop | Wails v3 (`github.com/wailsapp/wails/v3`) | Menjalankan Go dan webview, embed `frontend/dist`, jembatan event. |
+| Backend | Go 1.26 | Service, domain, persistensi, pipeline training. |
+| Frontend | Vue 3 (`<script setup lang="ts">`), TypeScript, Vite | Antarmuka. |
+| Routing | vue-router (hash history) | Navigasi Login → Dashboard → Project → Playground → Settings. |
+| Styling | CSS biasa + design token (`tokens.css`, `base.css`) | Tanpa UI kit. |
+| Konfigurasi lokal | SQLite (`modernc.org/sqlite`) | `settings.db` di UserConfigDir. |
+| Rahasia | OS keyring (`zalando/go-keyring`), fallback file terenkripsi | Kunci API dan password database. |
+| Penyimpanan RAG | PostgreSQL + pgvector (`jackc/pgx/v5`) | Project, persona, dokumen, chunk, pencarian vektor HNSW. |
+| Parsing dokumen | Docling (`github.com/miku/doclingclient`) | Mode `local` (CLI) atau `serve` (docling-serve), hybrid chunker. |
+| Identitas | google/uuid | Primary key UUID. |
+| Task runner | Task (`Taskfile.yml`) | Dev, build, package, regenerate bindings. |
+| Package manager | npm | Dependency frontend. |
 
 ## Arsitektur
 
@@ -93,13 +95,11 @@ flowchart TB
     Services -->|"Test connection"| Models
 ```
 
-Poin penting:
+`main.go` menyambungkan settings store ke tiga service Wails, lalu membuka window RAG Studio (1024×768). Frontend hanya memanggil service lewat binding. Frontend tidak membuka PostgreSQL atau keyring sendiri.
 
-- `main.go` adalah *composition root*: membuka settings store, mendaftarkan tiga service ke Wails, lalu membuat window **RAG Studio** (1024×768).
-- Service adalah satu-satunya permukaan yang dipanggil frontend; frontend tidak pernah membuka PostgreSQL atau keyring secara langsung.
-- `ProjectService` membuka koneksi PostgreSQL **per operasi** menggunakan konfigurasi dari `SettingsRepository`, lalu menutupnya lagi.
-- `training.Manager` menjalankan maksimal **2 worker** per sesi aplikasi; progres dikirim sebagai event Wails `training:progress` dan `training:finished`.
-- File dokumen disimpan dengan nama = checksum SHA-256 agar unggahan identik tidak duplikat; penulisan dilakukan secara atomik.
+`ProjectService` membuka koneksi PostgreSQL setiap kali ada operasi, memakai konfigurasi dari `SettingsRepository`, lalu menutupnya. `training.Manager` menjalankan maksimal dua worker per sesi dan mengirim progres lewat event `training:progress` serta `training:finished`.
+
+Nama file dokumen memakai checksum SHA-256, sehingga unggahan yang sama tidak membuat file ganda. Penulisan file dilakukan atomik.
 
 ## Alur aplikasi (flowchart)
 
@@ -129,21 +129,21 @@ flowchart TD
     L --> O
 ```
 
-Alur teknis training lebih detail:
+Saat **Train project** dijalankan:
 
-1. `TrainProject` memvalidasi konfigurasi database, embedding, dan Docling (semua harus sudah di-Save).
-2. Status `processing` yang ditinggalkan sesi sebelumnya di-reset (`ResetStaleProcessing`).
-3. Dokumen yang bisa dilatih diambil (`ListTrainableDocuments`); bila semua sudah terproses, di-reset untuk re-index.
-4. Pipeline menandai `processing`, memanggil Docling `ChunkHybridFile` dengan OCR aktif dan opsi chunk dari Embedding settings, lalu menandai `chunked` dengan jumlah chunk.
-5. Kegagalan dicatat sebagai `failed` disertai pesan error (dipangkas 500 karakter).
+1. `TrainProject` mengecek konfigurasi database, embedding, dan Docling. Semuanya harus sudah disimpan.
+2. Status `processing` dari sesi sebelumnya di-reset (`ResetStaleProcessing`).
+3. Dokumen yang perlu dilatih diambil lewat `ListTrainableDocuments`. Kalau semuanya sudah terproses, di-reset untuk re-index.
+4. Pipeline menandai `processing`, memanggil Docling `ChunkHybridFile` dengan OCR aktif dan opsi chunk dari Settings → Embedding model, lalu menandai `chunked` beserta jumlah chunk.
+5. Kalau gagal, status jadi `failed` dan pesan error disimpan (dipangkas 500 karakter).
 
 ## Model data (ERD)
 
-Ada **dua database** dengan peran berbeda: SQLite untuk konfigurasi aplikasi, PostgreSQL untuk data RAG.
+Ada dua database. SQLite menyimpan konfigurasi aplikasi, PostgreSQL menyimpan data RAG.
 
 ### PostgreSQL (data RAG)
 
-Skema dibuat/dimigrasi oleh `projects.SchemaSQL(vectorDimension)` dengan extension `vector`.
+Skema dibuat oleh `projects.SchemaSQL(vectorDimension)` dengan extension `vector`.
 
 ```mermaid
 erDiagram
@@ -198,18 +198,18 @@ erDiagram
     }
 ```
 
-Indeks penting:
+Indeks yang dipakai:
 
-- `idx_documents_project` — mempercepat query dokumen per project.
-- `idx_chunks_project` — membatasi pencarian ke satu project (isolasi multi-tenant).
-- `idx_chunks_embedding` — HNSW dengan `vector_cosine_ops` untuk ANN similarity search.
-- `ON DELETE CASCADE` dari `projects → documents → chunks` menjaga integritas saat project dihapus.
+- `idx_documents_project` untuk query dokumen per project.
+- `idx_chunks_project` membatasi pencarian ke satu project.
+- `idx_chunks_embedding` memakai HNSW dengan `vector_cosine_ops` untuk pencarian vektor.
+- `ON DELETE CASCADE` dari `projects → documents → chunks` menghapus turunan saat project dihapus.
 
-> Catatan: dokumen lama `rag_module_analysis.md` menyebut tabel `schema_migrations`, tetapi tabel tersebut **tidak** dibuat oleh skema aktif di `internal/projects/schema.go`.
+Dokumen lama `rag_module_analysis.md` menyebut tabel `schema_migrations`. Tabel itu tidak dibuat oleh skema di `internal/projects/schema.go`.
 
 ### SQLite (konfigurasi aplikasi)
 
-Empat tabel *single-row* (`id = 1`); tidak ada relasi antar tabel. Nilai rahasia tidak disimpan di sini — hanya flag `configured`, `set`, dan `hint`.
+Empat tabel berisi satu baris (`id = 1`) dan tidak punya relasi. Kunci API tidak disimpan di sini, hanya status `configured`, `set`, dan `hint`.
 
 ```mermaid
 erDiagram
@@ -258,18 +258,18 @@ erDiagram
 ├── main.go                     # composition root Wails
 ├── go.mod / go.sum             # dependency Go
 ├── Taskfile.yml                # dev, build, package, bindings
-├── build/                      # aset & template packaging Wails (linux, windows, darwin, ...)
+├── build/                      # aset dan template packaging Wails (linux, windows, darwin, ...)
 ├── frontend/
 │   ├── src/
 │   │   ├── pages/              # Login, Dashboard, ProjectDetail, Playground, settings/*
 │   │   ├── components/         # komponen UI bersama
 │   │   ├── layouts/            # AppShell (sidebar)
-│   │   ├── services/           # adapter Wails bindings ↔ UI (+ mock fallback)
-│   │   ├── mock/data.ts        # data mock untuk UI yang belum real
+│   │   ├── services/           # adapter binding Wails ke UI, dengan fallback data contoh
+│   │   ├── mock/data.ts        # data contoh untuk UI yang belum terhubung
 │   │   ├── router/             # vue-router
 │   │   └── styles/             # tokens.css, base.css
 │   ├── bindings/               # TypeScript bindings hasil generate Wails
-│   └── dist/                   # hasil build frontend (di-embed oleh Go)
+│   └── dist/                   # hasil build frontend, di-embed oleh Go
 └── internal/
     ├── service/                # service yang di-bind ke Wails
     ├── settings/               # model, store SQLite, secret store, probe koneksi
@@ -282,47 +282,49 @@ erDiagram
 
 Prasyarat:
 
-- Go **1.26** atau lebih baru
-- Node.js + npm
+- Go 1.26 atau lebih baru
+- Node.js dan npm
 - Wails v3 CLI (`wails3`)
 - Task (`go-task`)
-- PostgreSQL dengan extension `pgvector` (`CREATE EXTENSION vector;` — otomatis dijalankan oleh migrasi)
-- Docling: mode `serve` (docling-serve berjalan) atau mode `local` (CLI `docling` terpasang)
+- PostgreSQL dengan extension `pgvector`. `CREATE EXTENSION vector;` dijalankan oleh migrasi.
+- Docling: mode `serve` (docling-serve aktif) atau mode `local` (CLI `docling` terpasang)
 
 ```bash
-# 1. Install dependency frontend
+# 1. Pasang dependency frontend
 cd frontend && npm install && cd ..
 
 # 2. Jalankan mode development
 task dev
 # alternatif: wails3 dev -config ./build/config.yml -port 9245
 
-# 3. Build / package aplikasi
+# 3. Build dan package
 task build
 task package
 
-# 4. Regenerate bindings TypeScript setelah mengubah service Go
+# 4. Regenerate bindings TypeScript setelah service Go diubah
 task bindings
 ```
 
-Saat pertama kali dijalankan, buka **Settings** dan isi keempat bagian (Chat model, Embedding model, Database, Document processing) sebelum membuat project dan melatih dokumen — pipeline menolak berjalan jika salah satu belum di-`Save`.
+Sebelum membuat project dan melatih dokumen, isi keempat bagian di Settings. Pipeline menolak jalan kalau ada yang belum disimpan.
 
 ## Konfigurasi
 
 | Halaman Settings | Field utama | Catatan |
 | --- | --- | --- |
-| Chat model | Provider (`openai-compatible`, `anthropic`, `ollama`), base URL, API key, nama model, temperature, max output tokens | `Test connection` melakukan round-trip nyata. |
-| Embedding model | Provider (`openai-compatible`, `ollama`, `huggingface`), base URL, API key, nama model, **vector dimension**, max token chunk, tokenizer | Mengubah model/dimensi memerlukan **re-index seluruh project**. Dimensi dipakai untuk `vector(N)` dan validasi saat test. |
-| Database | Host, port, database, user, password, SSL mode, schema | `Test connection` mengecek koneksi & extension `vector`; `Save` langsung menjalankan migrasi tabel. |
-| Document processing | Mode (`local` / `serve`), base URL, timeout (detik), API key | Mode `serve` memakai docling-serve; mode `local` mengecek CLI terpasang. |
+| Chat model | Provider (`openai-compatible`, `anthropic`, `ollama`), base URL, kunci API, nama model, temperature, max output tokens | Test connection mengirim permintaan ke provider. |
+| Embedding model | Provider (`openai-compatible`, `ollama`, `huggingface`), base URL, kunci API, nama model, vector dimension, max token chunk, tokenizer | Kalau model atau dimensi diganti, semua project harus di-index ulang. Dimensi dipakai untuk `vector(N)` dan validasi. |
+| Database | Host, port, nama database, user, password, SSL mode, schema | Test connection mengecek koneksi dan extension `vector`. Save langsung menjalankan migrasi. |
+| Document processing | Mode (`local` / `serve`), base URL, timeout (detik), kunci API | Mode `serve` memakai docling-serve. Mode `local` mengecek CLI. |
 
-Semua field yang tersimpan ditandai `configured = true`. API key/password kosong saat edit akan memakai nilai tersimpan, jadi pengguna tidak perlu mengetik ulang rahasia untuk sekadar test koneksi.
+Field yang disimpan ditandai `configured = true`. Kalau kunci API atau password dikosongkan saat edit, nilai lama tetap dipakai. Jadi tidak perlu mengetik ulang untuk sekadar test koneksi.
 
 ## Keamanan kredensial
 
-- `chat_model_api_key`, `embedding_model_api_key`, `database_password`, dan `docling_api_key` disimpan di **OS keyring** (Windows Credential Manager / macOS Keychain / libsecret).
-- Jika keyring tidak tersedia, dipakai **fallback file terenkripsi** di direktori konfigurasi aplikasi.
-- SQLite hanya menyimpan status `set` dan `hint` (misalnya beberapa karakter terakhir) untuk keperluan tampilan — bukan nilai rahasia.
+`chat_model_api_key`, `embedding_model_api_key`, `database_password`, dan `docling_api_key` disimpan di OS keyring (Windows Credential Manager, macOS Keychain, atau libsecret).
+
+Kalau keyring tidak tersedia, dipakai file terenkripsi di direktori konfigurasi aplikasi.
+
+SQLite hanya menyimpan status `set` dan `hint` (misalnya beberapa karakter terakhir) untuk ditampilkan di UI. Nilai rahasianya tidak ikut.
 
 ## Pengujian
 
@@ -330,13 +332,13 @@ Semua field yang tersimpan ditandai `configured = true`. API key/password kosong
 go test ./...
 ```
 
-Test unit berjalan tanpa layanan eksternal. Test live yang membutuhkan layanan nyata akan otomatis **di-skip** kecuali environment variable berikut diisi: `RAG_TEST_PG_PASSWORD`, `RAG_TEST_OPENAI_BASE_URL`, `RAG_TEST_OPENAI_KEY`, `RAG_TEST_OPENAI_MODEL`, `RAG_TEST_OLLAMA_BASE_URL`, `RAG_TEST_OLLAMA_EMBED_MODEL`, `RAG_TEST_OLLAMA_EMBED_DIM`.
+Test unit jalan tanpa layanan eksternal. Test live dilewati kecuali environment variable ini diisi: `RAG_TEST_PG_PASSWORD`, `RAG_TEST_OPENAI_BASE_URL`, `RAG_TEST_OPENAI_KEY`, `RAG_TEST_OPENAI_MODEL`, `RAG_TEST_OLLAMA_BASE_URL`, `RAG_TEST_OLLAMA_EMBED_MODEL`, `RAG_TEST_OLLAMA_EMBED_DIM`.
 
 ## Roadmap
 
-- [ ] Implementasi embedding nyata dan penyimpanan vektor ke `chunks.embedding` setelah Docling chunking.
-- [ ] Retrieval HNSW per project (`WHERE project_id = ... ORDER BY embedding <=> $query`) pada tabel `chunks`.
-- [ ] Generasi jawaban RAG memakai chat model + persona (`strict_knowledge`, tone, bahasa).
-- [ ] Mengganti data mock Playground dengan alur retrieval + chat yang sesungguhnya.
-- [ ] Autentikasi pengguna (halaman Login saat ini masih mock).
-- [ ] Migrasi skema versi terkelola (misalnya tabel `schema_migrations`) alih-alih `ALTER TABLE` inline.
+- [ ] Isi `chunks.embedding` setelah Docling selesai memotong dokumen.
+- [ ] Retrieval HNSW per project (`WHERE project_id = ... ORDER BY embedding <=> $query`).
+- [ ] Jawaban RAG memakai chat model dan persona (`strict_knowledge`, tone, bahasa).
+- [ ] Playground memakai retrieval dan chat, bukan data contoh.
+- [ ] Login dengan akun.
+- [ ] Migrasi skema berversi, misalnya tabel `schema_migrations`, menggantikan `ALTER TABLE` inline.
