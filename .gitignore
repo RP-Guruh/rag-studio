@@ -1,0 +1,13 @@
+build/bin
+node_modules
+frontend/dist
+/rag_project
+
+# Generated binaries and task caches
+/bin/
+/.task/
+
+# AI planning / agent instruction documents (local only)
+/AGENTS.MD
+/SKILL.MD
+/rag_module_analysis.md

@@ -1,0 +1,126 @@
+<script setup lang="ts">
+import { useRoute } from 'vue-router'
+
+const route = useRoute()
+
+const navItems = [
+  { name: 'Chat model', path: '/settings/chat' },
+  { name: 'Embedding model', path: '/settings/embedding' },
+  { name: 'Database', path: '/settings/database' },
+  { name: 'Document processing', path: '/settings/docling' }
+]
+</script>
+
+<template>
+  <div class="settings-page">
+    <header class="settings-header">
+      <div class="header-titles">
+        <h1 class="page-title">Settings</h1>
+        <p class="page-description">Configure language models, embedding vectors, the vector database, and document processing.</p>
+      </div>
+    </header>
+
+    <div class="settings-body">
+      <!-- Secondary Navigation on Left -->
+      <aside class="settings-nav-pane">
+        <nav class="settings-nav">
+          <router-link
+            v-for="item in navItems"
+            :key="item.path"
+            :to="item.path"
+            class="settings-nav-item"
+            :class="{ 'settings-nav-item--active': route.path === item.path }"
+          >
+            {{ item.name }}
+          </router-link>
+        </nav>
+      </aside>
+
+      <!-- Settings Content View -->
+      <main class="settings-content-pane">
+        <router-view />
+      </main>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.settings-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.settings-header {
+  padding: var(--space-24) var(--space-32);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.header-titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.page-title {
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+}
+
+.page-description {
+  font-size: var(--font-size-base);
+  color: var(--color-text-muted);
+}
+
+.settings-body {
+  display: flex;
+  flex: 1;
+}
+
+.settings-nav-pane {
+  width: 220px;
+  min-width: 220px;
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: var(--space-24) var(--space-12);
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--space-12);
+  min-height: 38px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-muted);
+  text-decoration: none;
+  transition: background-color var(--transition-fast), color var(--transition-fast);
+}
+
+.settings-nav-item:hover {
+  background-color: var(--color-surface-subtle);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+.settings-nav-item--active {
+  background-color: var(--color-surface-subtle);
+  color: var(--color-accent);
+}
+
+.settings-content-pane {
+  flex: 1;
+  padding: var(--space-32);
+  max-width: 680px;
+}
+</style>

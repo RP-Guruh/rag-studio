@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=rag-project
+Exec=rag-project
+Icon=rag-project
+Categories=Development;
+Terminal=false
+Keywords=wails
+Version=1.0
+StartupNotify=false

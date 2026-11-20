@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A rag_project application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/rag_project %u
+Terminal=false
+Type=Application
+Icon=rag_project
+Categories=Utility;
+StartupWMClass=rag_project
+
+ 
