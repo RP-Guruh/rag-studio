@@ -8,8 +8,6 @@ import {
   createUser,
   updateUserProjects,
   deleteUser,
-  setGuestAccess,
-  guestAccess,
   type User
 } from '../../services/auth'
 import type { Project } from '../../mock/data'
@@ -87,15 +85,6 @@ async function handleDelete(user: User) {
   }
 }
 
-async function handleGuestToggle(event: Event) {
-  const enabled = (event.target as HTMLInputElement).checked
-  try {
-    await setGuestAccess(enabled)
-    success.value = enabled ? 'Guest access enabled.' : 'Guest access disabled.'
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
-  }
-}
 </script>
 
 <template>
@@ -177,13 +166,6 @@ async function handleGuestToggle(event: Event) {
       </BaseButton>
     </section>
 
-    <section class="users-card">
-      <h3 class="card-title">Guest access</h3>
-      <label class="guest-toggle">
-        <input type="checkbox" :checked="guestAccess" @change="handleGuestToggle" />
-        Allow guests to try the demo project
-      </label>
-    </section>
   </div>
 </template>
 

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import BaseButton from '../components/BaseButton.vue'
 import FormField from '../components/FormField.vue'
 import AppLogo from '../components/AppLogo.vue'
-import { hasUsers, guestAccess, register, login, loginGuest } from '../services/auth'
+import { hasUsers, register, login, enterDemo } from '../services/auth'
 import { t } from '../i18n'
 
 const router = useRouter()
@@ -33,17 +33,10 @@ async function submit() {
   }
 }
 
-async function handleContinueAsGuest() {
+function handleContinueAsGuest() {
   error.value = ''
-  busy.value = true
-  try {
-    await loginGuest()
-    router.push('/dashboard')
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : String(err)
-  } finally {
-    busy.value = false
-  }
+  enterDemo()
+  router.push('/dashboard')
 }
 </script>
 
@@ -67,11 +60,9 @@ async function handleContinueAsGuest() {
 
       <form class="login-form" @submit.prevent="submit">
         <BaseButton
-          v-if="guestAccess"
           variant="primary"
           type="button"
           class="guest-login-btn"
-          :disabled="busy"
           @click="handleContinueAsGuest"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -113,6 +104,15 @@ async function handleContinueAsGuest() {
             {{ busy ? '…' : (isRegister ? t('auth.register') : t('auth.signIn')) }}
           </BaseButton>
         </div>
+
+        <button
+          v-if="isRegister"
+          type="button"
+          class="setup-link"
+          @click="router.push('/settings/health')"
+        >
+          Set up RAG Studio first (Docker, database, models)
+        </button>
       </form>
     </div>
   </div>
@@ -143,6 +143,16 @@ async function handleContinueAsGuest() {
   background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
   filter: blur(80px);
   pointer-events: none;
+}
+
+.setup-link {
+  background: none;
+  border: none;
+  color: var(--color-accent);
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+  text-decoration: underline;
+  padding: var(--space-8);
 }
 
 .login-error {

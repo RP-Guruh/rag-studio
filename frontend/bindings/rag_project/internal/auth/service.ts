@@ -16,7 +16,6 @@ import * as $models from "./models.js";
 
 /**
  * Authorize rejects operations on projects the current user may not manage.
- * Guest accounts are read-only and have no real projects.
  */
 export function Authorize(projectID: string): $CancellablePromise<void> {
     return $Call.ByID(3194311396, projectID);
@@ -44,14 +43,9 @@ export function DeleteUser(userID: string): $CancellablePromise<void> {
 }
 
 /**
- * GuestAccess returns whether trial logins are enabled.
- */
-export function GuestAccess(): $CancellablePromise<boolean> {
-    return $Call.ByID(2354588085);
-}
-
-/**
- * HasUsers reports whether a real (non-guest) account exists.
+ * HasUsers reports whether an account exists. On a fresh install, before the
+ * database is configured, it reports "no users" so the UI can show first-run
+ * setup and registration instead of failing.
  */
 export function HasUsers(): $CancellablePromise<boolean> {
     return $Call.ByID(223091701);
@@ -72,13 +66,6 @@ export function Login(email: string, password: string): $CancellablePromise<$mod
 }
 
 /**
- * LoginGuest signs in as the read-only trial account.
- */
-export function LoginGuest(): $CancellablePromise<$models.User | null> {
-    return $Call.ByID(626985954);
-}
-
-/**
  * Logout clears the persisted session.
  */
 export function Logout(): $CancellablePromise<void> {
@@ -93,17 +80,10 @@ export function Register(email: string, password: string): $CancellablePromise<$
 }
 
 /**
- * RequireManager rejects guests and signed-out users.
+ * RequireManager rejects signed-out users.
  */
 export function RequireManager(): $CancellablePromise<void> {
     return $Call.ByID(2962019279);
-}
-
-/**
- * SetGuestAccess enables or disables the trial account. Administrator only.
- */
-export function SetGuestAccess(enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(3731152231, enabled);
 }
 
 /**
@@ -115,7 +95,7 @@ export function UpdateUserProjects(userID: string, projectIDs: string[] | null):
 
 /**
  * VisibleProjectIDs returns the project ids the current user may see. Admins
- * see every project; sub-users only their assignments; guests see none.
+ * see every project; sub-users only their assignments.
  */
 export function VisibleProjectIDs(): $CancellablePromise<string[] | null> {
     return $Call.ByID(1039302440);

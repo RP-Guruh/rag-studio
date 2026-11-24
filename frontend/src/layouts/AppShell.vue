@@ -156,6 +156,10 @@ async function handleSignOut() {
 
     <!-- Main Content Area -->
     <main class="main-content">
+      <div v-if="isGuest" class="demo-banner">
+        <span>Demo mode — sample data. Set up services to use your own knowledge base.</span>
+        <button type="button" @click="router.push('/settings/health')">Set up RAG Studio</button>
+      </div>
       <router-view />
     </main>
   </div>
@@ -347,6 +351,29 @@ async function handleSignOut() {
   background-image:
     radial-gradient(ellipse at 80% 0%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
     radial-gradient(ellipse at 10% 100%, rgba(99, 102, 241, 0.03) 0%, transparent 40%);
+}
+
+.demo-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-24);
+  background-color: var(--color-accent-subtle);
+  border-bottom: 1px solid var(--color-border);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.demo-banner button {
+  border: 1px solid var(--color-accent);
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--color-accent);
+  padding: var(--space-8) var(--space-12);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
 }
 
 .guest-badge {

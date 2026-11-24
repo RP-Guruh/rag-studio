@@ -7,12 +7,32 @@ export type { User }
 
 export const currentUser = ref<User | null>(null)
 export const hasUsers = ref(false)
-export const guestAccess = ref(true)
 export const authReady = ref(false)
+export const demoMode = ref(false)
 
 export const isAuthenticated = computed(() => currentUser.value !== null)
 export const isGuest = computed(() => currentUser.value?.role === 'guest')
 export const isAdmin = computed(() => currentUser.value?.role === 'admin')
+
+const demoUser: User = {
+  id: 'demo',
+  email: 'demo@rag-studio.local',
+  role: 'guest',
+  projectIds: []
+}
+
+/** Enters frontend-only demo mode. No backend or configuration required. */
+export function enterDemo(): User {
+  demoMode.value = true
+  currentUser.value = { ...demoUser }
+  authReady.value = true
+  return currentUser.value
+}
+
+export function leaveDemo() {
+  demoMode.value = false
+  currentUser.value = null
+}
 
 export async function initAuth(): Promise<void> {
   const runtime = await waitForWailsRuntime()
@@ -21,16 +41,17 @@ export async function initAuth(): Promise<void> {
     return
   }
   try {
-    const [users, user, guest] = await Promise.all([
+    const [users, user] = await Promise.all([
       AuthService.HasUsers(),
-      AuthService.CurrentUser(),
-      AuthService.GuestAccess()
+      AuthService.CurrentUser()
     ])
     hasUsers.value = users
     currentUser.value = user
-    guestAccess.value = guest
   } catch (error) {
-    console.error('Failed to load auth state:', error)
+    // A fresh install cannot query accounts before the database is configured.
+    // Treat it as "no users yet" so first-run setup stays reachable.
+    hasUsers.value = false
+    currentUser.value = null
   } finally {
     authReady.value = true
   }
@@ -47,13 +68,6 @@ export async function register(email: string, password: string): Promise<User> {
 export async function login(email: string, password: string): Promise<User> {
   const user = await AuthService.Login(email, password)
   if (!user) throw new Error('Invalid email or password')
-  currentUser.value = user
-  return user
-}
-
-export async function loginGuest(): Promise<User> {
-  const user = await AuthService.LoginGuest()
-  if (!user) throw new Error('Guest access is not available')
   currentUser.value = user
   return user
 }
@@ -81,7 +95,3 @@ export async function deleteUser(userID: string): Promise<void> {
   await AuthService.DeleteUser(userID)
 }
 
-export async function setGuestAccess(enabled: boolean): Promise<void> {
-  await AuthService.SetGuestAccess(enabled)
-  guestAccess.value = enabled
-}

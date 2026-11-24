@@ -18,7 +18,4 @@ type SessionStore interface {
 const (
 	RoleAdmin = "admin"
 	RoleUser  = "user"
-	RoleGuest = "guest"
 )
-
-const guestEmail = "guest@rag-studio.local"

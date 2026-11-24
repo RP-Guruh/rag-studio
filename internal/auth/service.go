@@ -62,28 +62,18 @@ func (s *Service) pool(ctx context.Context) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-func (s *Service) ensureGuest(ctx context.Context, pool *pgxpool.Pool) (string, error) {
-	var id string
-	err := pool.QueryRow(ctx, `SELECT id::text FROM users WHERE email = $1`, guestEmail).Scan(&id)
-	if err == nil {
-		return id, nil
-	}
-	if !errors.Is(err, pgx.ErrNoRows) {
-		return "", fmt.Errorf("find guest user: %w", err)
-	}
-	err = pool.QueryRow(ctx, `
-		INSERT INTO users (email, password_hash, role) VALUES ($1, '', $2)
-		ON CONFLICT (email) DO UPDATE SET email = excluded.email
-		RETURNING id::text
-	`, guestEmail, RoleGuest).Scan(&id)
-	if err != nil {
-		return "", fmt.Errorf("create guest user: %w", err)
-	}
-	return id, nil
+func (s *Service) databaseConfigured() bool {
+	all, err := s.settingsRepo.Get()
+	return err == nil && all.Database.Configured
 }
 
-// HasUsers reports whether a real (non-guest) account exists.
+// HasUsers reports whether an account exists. On a fresh install, before the
+// database is configured, it reports "no users" so the UI can show first-run
+// setup and registration instead of failing.
 func (s *Service) HasUsers() (bool, error) {
+	if !s.databaseConfigured() {
+		return false, nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	pool, err := s.pool(ctx)
@@ -92,7 +82,7 @@ func (s *Service) HasUsers() (bool, error) {
 	}
 	defer pool.Close()
 	var count int
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role <> $1`, RoleGuest).Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return false, fmt.Errorf("count users: %w", err)
 	}
 	return count > 0, nil
@@ -107,6 +97,9 @@ func (s *Service) Register(email, password string) (*User, error) {
 	if len(password) < 8 {
 		return nil, errors.New("password must be at least 8 characters")
 	}
+	if !s.databaseConfigured() {
+		return nil, errors.New("database is not configured. Open Settings → Setup & health and start the local stack first")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	pool, err := s.pool(ctx)
@@ -116,7 +109,7 @@ func (s *Service) Register(email, password string) (*User, error) {
 	defer pool.Close()
 
 	var count int
-	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users WHERE role <> $1`, RoleGuest).Scan(&count); err != nil {
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
 		return nil, fmt.Errorf("count users: %w", err)
 	}
 	if count > 0 {
@@ -155,8 +148,8 @@ func (s *Service) Login(email, password string) (*User, error) {
 
 	var id, hash string
 	err = pool.QueryRow(ctx, `
-		SELECT id::text, password_hash FROM users WHERE email = $1 AND role <> $2
-	`, email, RoleGuest).Scan(&id, &hash)
+		SELECT id::text, password_hash FROM users WHERE email = $1
+	`, email).Scan(&id, &hash)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, errors.New("invalid email or password")
@@ -165,29 +158,6 @@ func (s *Service) Login(email, password string) (*User, error) {
 	}
 	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)); err != nil {
 		return nil, errors.New("invalid email or password")
-	}
-	if err := s.sessions.SetSession(id); err != nil {
-		return nil, err
-	}
-	return s.userByID(ctx, pool, id)
-}
-
-// LoginGuest signs in as the read-only trial account.
-func (s *Service) LoginGuest() (*User, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	pool, err := s.pool(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer pool.Close()
-
-	if enabled, err := s.guestAccess(ctx, pool); err != nil || !enabled {
-		return nil, errors.New("guest access is disabled")
-	}
-	id, err := s.ensureGuest(ctx, pool)
-	if err != nil {
-		return nil, err
 	}
 	if err := s.sessions.SetSession(id); err != nil {
 		return nil, err
@@ -254,18 +224,6 @@ func (s *Service) requireAdmin(ctx context.Context, pool *pgxpool.Pool) error {
 		return errors.New("only an administrator can manage accounts")
 	}
 	return nil
-}
-
-func (s *Service) guestAccess(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
-	var value string
-	err := pool.QueryRow(ctx, `SELECT value FROM app_config WHERE key = 'guest_access'`).Scan(&value)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return true, nil
-	}
-	if err != nil {
-		return false, fmt.Errorf("read guest access setting: %w", err)
-	}
-	return value == "true", nil
 }
 
 // ListUsers returns all accounts. Administrator only.
@@ -401,42 +359,7 @@ func (s *Service) DeleteUser(userID string) error {
 	return err
 }
 
-// SetGuestAccess enables or disables the trial account. Administrator only.
-func (s *Service) SetGuestAccess(enabled bool) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	pool, err := s.pool(ctx)
-	if err != nil {
-		return err
-	}
-	defer pool.Close()
-	if err := s.requireAdmin(ctx, pool); err != nil {
-		return err
-	}
-	value := "false"
-	if enabled {
-		value = "true"
-	}
-	_, err = pool.Exec(ctx, `
-		INSERT INTO app_config (key, value) VALUES ('guest_access', $1)
-		ON CONFLICT (key) DO UPDATE SET value = excluded.value
-	`, value)
-	return err
-}
-
-// GuestAccess returns whether trial logins are enabled.
-func (s *Service) GuestAccess() (bool, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	pool, err := s.pool(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer pool.Close()
-	return s.guestAccess(ctx, pool)
-}
-
-// RequireManager rejects guests and signed-out users.
+// RequireManager rejects signed-out users.
 func (s *Service) RequireManager() error {
 	user, err := s.CurrentUser()
 	if err != nil {
@@ -445,20 +368,17 @@ func (s *Service) RequireManager() error {
 	if user == nil {
 		return errors.New("please sign in first")
 	}
-	if user.Role == RoleGuest {
-		return errors.New("guest mode is read-only. Register or sign in to manage projects")
-	}
 	return nil
 }
 
 // VisibleProjectIDs returns the project ids the current user may see. Admins
-// see every project; sub-users only their assignments; guests see none.
+// see every project; sub-users only their assignments.
 func (s *Service) VisibleProjectIDs() ([]string, error) {
 	user, err := s.CurrentUser()
 	if err != nil {
 		return nil, err
 	}
-	if user == nil || user.Role == RoleGuest {
+	if user == nil {
 		return []string{}, nil
 	}
 	if user.Role == RoleAdmin {
@@ -488,7 +408,6 @@ func (s *Service) VisibleProjectIDs() ([]string, error) {
 }
 
 // Authorize rejects operations on projects the current user may not manage.
-// Guest accounts are read-only and have no real projects.
 func (s *Service) Authorize(projectID string) error {
 	user, err := s.CurrentUser()
 	if err != nil {
@@ -496,9 +415,6 @@ func (s *Service) Authorize(projectID string) error {
 	}
 	if user == nil {
 		return errors.New("please sign in first")
-	}
-	if user.Role == RoleGuest {
-		return errors.New("guest mode is read-only. Register or sign in to manage projects")
 	}
 	if user.Role == RoleAdmin {
 		return nil

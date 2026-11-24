@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
-import { isAuthenticated, isAdmin } from '../services/auth'
+import { isAuthenticated, isAdmin, hasUsers } from '../services/auth'
 
 import LoginPage from '../pages/LoginPage.vue'
 import AppShell from '../layouts/AppShell.vue'
@@ -98,7 +98,9 @@ export const router = createRouter({
 
 // Navigation guard to ensure login screen is shown first unless signed in
 router.beforeEach((to, _from, next) => {
-  if (to.path !== '/login' && !isAuthenticated.value) {
+  const firstRun = !hasUsers.value && !isAuthenticated.value
+  const setupRoute = to.path.startsWith('/settings')
+  if (to.path !== '/login' && !isAuthenticated.value && !(firstRun && setupRoute)) {
     next('/login')
   } else if (to.path === '/settings/users' && !isAdmin.value) {
     next('/settings/health')

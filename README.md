@@ -284,7 +284,17 @@ erDiagram
 ## Deployment & download
 
 Installer didistribusikan lewat **GitHub Releases**: `https://github.com/RP-Guruh/rag-studio/releases`.
+Aset yang tersedia: `.deb` (Debian/Ubuntu amd64 & arm64), installer `.exe` (Windows), serta arsip `.tar.gz`/`.zip`.
+
+```bash
+# Debian/Ubuntu
+sudo apt install ./rag-studio_0.1.1_amd64.deb
+rag-studio
+```
+
 Aplikasi bisa mengecek versi terbaru dan mengunduh aset yang sesuai dengan sistem operasi lewat Settings → Setup & health.
+
+**Fresh user:** klik **Continue as guest** untuk masuk mode demo tanpa setup apa pun. Untuk memakai knowledge base sendiri, klik **Set up RAG Studio** → Setup & health, lalu daftar akun admin pertama.
 
 Pembagian tanggung jawab:
 

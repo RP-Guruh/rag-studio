@@ -20,7 +20,7 @@ import (
 )
 
 // Version is overridden at build time with -X rag_project/internal/update.Version=x.y.z.
-var Version = "0.1.0"
+var Version = "0.1.1"
 
 const (
 	repoURL      = "https://github.com/RP-Guruh/rag-studio"

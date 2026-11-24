@@ -73,8 +73,82 @@ jobs:
           name: ${{ matrix.goos }}-${{ matrix.goarch }}
           path: release/*
 
+  deb:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [amd64, arm64]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build binary
+        env:
+          GOOS: linux
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: '0'
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          go build -tags production,purego,gtk3 -trimpath \
+            -ldflags="-s -w -X rag_project/internal/update.Version=${VERSION}" \
+            -o dist/rag-studio .
+      - name: Build .deb
+        run: bash deploy/linux/build-deb.sh dist/rag-studio "${{ github.ref_name }}" "${{ matrix.arch }}" release
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb-${{ matrix.arch }}
+          path: release/*.deb
+
+  windows-installer:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Build frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run build
+      - name: Build executable
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          mkdir -p dist
+          go build -tags production -trimpath `
+            -ldflags="-s -w -X rag_project/internal/update.Version=${env:VERSION}" `
+            -o dist/rag-studio.exe .
+      - name: Build installer with Inno Setup
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          $version = $env:VERSION.TrimStart('v')
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /dAppVersion=$version deploy\windows\installer.iss
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: release/*.exe
+
   release:
-    needs: build
+    needs: [build, deb, windows-installer]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
