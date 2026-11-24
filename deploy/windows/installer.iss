@@ -27,9 +27,9 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "Create a desktop icon"; GroupDescription: "Additional icons:"
 
 [Files]
-Source: "dist\rag-studio.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "README.md"; DestDir: "{app}"; Flags: ignoreversion
-Source: "deploy\local\docker-compose.yml"; DestDir: "{app}\deploy\local"; Flags: ignoreversion
+Source: "..\..\dist\rag-studio.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\deploy\local\docker-compose.yml"; DestDir: "{app}\deploy\local"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\rag-studio.exe"
