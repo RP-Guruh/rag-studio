@@ -1,17 +1,23 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import SplashScreen from './components/SplashScreen.vue'
+import { initAuth, authReady } from './services/auth'
 
-const showSplash = ref(true)
+const splashDone = ref(false)
+const showSplash = computed(() => !splashDone.value || !authReady.value)
+
+onMounted(() => {
+  void initAuth()
+})
 
 function handleSplashFinish() {
-  showSplash.value = false
+  splashDone.value = true
 }
 
 // Allow re-triggering splash from console or testing
 if (typeof window !== 'undefined') {
   ;(window as any).replaySplash = () => {
-    showSplash.value = true
+    splashDone.value = false
   }
 }
 </script>

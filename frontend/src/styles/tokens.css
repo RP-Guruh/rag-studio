@@ -1,3 +1,11 @@
+/*
+ * Responsive breakpoints (used consistently in media queries):
+ *   900px - sidebar / secondary navigation collapses
+ *   600px - forms and page headers stack into one column
+ * CSS variables cannot be used inside @media, so keep these values in sync
+ * across components.
+ */
+
 :root {
   /* Spacing scale: 4, 8, 12, 16, 20, 24, 32, 48, 64 */
   --space-4: 4px;

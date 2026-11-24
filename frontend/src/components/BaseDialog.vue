@@ -15,8 +15,26 @@ const dialogRef = ref<HTMLElement | null>(null)
 let previousActiveElement: HTMLElement | null = null
 
 function handleKeyDown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && props.open) {
+  if (!props.open) return
+  if (e.key === 'Escape') {
     emit('close')
+    return
+  }
+  if (e.key !== 'Tab' || !dialogRef.value) return
+  const focusable = Array.from(
+    dialogRef.value.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    )
+  ).filter((element) => !element.hasAttribute('disabled'))
+  if (focusable.length === 0) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
   }
 }
 

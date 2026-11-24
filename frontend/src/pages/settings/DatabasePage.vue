@@ -10,6 +10,7 @@ import {
   saveDatabase,
   sslModes,
   testDatabase,
+  backupSettings,
   type Database,
   type TestResult
 } from '../../services/settings'
@@ -36,6 +37,22 @@ onMounted(async () => {
     isLoading.value = false
   }
 })
+
+async function handleBackup() {
+  try {
+    const data = await backupSettings()
+    if (!data) return
+    const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0))
+    const url = URL.createObjectURL(new Blob([bytes], { type: 'application/x-sqlite3' }))
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'rag-studio-settings.db'
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (error) {
+    formError.value = errorText(error)
+  }
+}
 
 async function handleTestConnection() {
   isTesting.value = true
@@ -220,6 +237,10 @@ async function executeSave() {
 
         <BaseButton variant="primary" type="submit" :disabled="isSaving">
           {{ isSaving ? 'Saving...' : 'Save' }}
+        </BaseButton>
+
+        <BaseButton variant="ghost" type="button" @click="handleBackup">
+          Backup settings
         </BaseButton>
 
         <span v-if="saveSuccess" class="save-indicator">Settings saved.</span>

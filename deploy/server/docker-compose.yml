@@ -1,0 +1,45 @@
+services:
+  app:
+    image: ghcr.io/rp-guruh/rag-studio:latest
+    build: ../..
+    restart: unless-stopped
+    environment:
+      RAG_STUDIO_SERVER: "1"
+      RAG_STUDIO_CONFIG_DIR: /data
+      RAG_STUDIO_SECRET_KEY: ${RAG_STUDIO_SECRET_KEY:?set a strong secret key}
+      RAG_STUDIO_CHAT_API_KEY: ${RAG_STUDIO_CHAT_API_KEY:-}
+      RAG_STUDIO_EMBEDDING_API_KEY: ${RAG_STUDIO_EMBEDDING_API_KEY:-}
+      RAG_STUDIO_DOCLING_API_KEY: ${RAG_STUDIO_DOCLING_API_KEY:-}
+      FRONTEND_DEVSERVER_URL: ""
+    ports:
+      - "8080:8080"
+    volumes:
+      - appdata:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: rag_studio
+      POSTGRES_USER: ragstudio
+      POSTGRES_PASSWORD: ${RAG_DB_PASSWORD:?set a database password}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ragstudio -d rag_studio"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  docling:
+    image: quay.io/docling-project/docling-serve:latest
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+
+volumes:
+  pgdata:
+  appdata:

@@ -16,6 +16,14 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as settings$0 from "../settings/models.js";
 
 /**
+ * BackupSettings returns the local SQLite database as base64 so the UI can
+ * download a copy. Secrets stay in the OS keyring and are not included.
+ */
+export function BackupSettings(): $CancellablePromise<string> {
+    return $Call.ByID(342690444);
+}
+
+/**
  * ChatModelAPIKey returns the stored chat API key, or an empty string.
  */
 export function ChatModelAPIKey(): $CancellablePromise<string> {
@@ -49,6 +57,13 @@ export function EmbeddingAPIKey(): $CancellablePromise<string> {
  */
 export function GetSettings(): $CancellablePromise<settings$0.Settings> {
     return $Call.ByID(1750573024);
+}
+
+/**
+ * RestoreSettings replaces the local SQLite database from a base64 backup.
+ */
+export function RestoreSettings(payload: string): $CancellablePromise<void> {
+    return $Call.ByID(2771529326, payload);
 }
 
 /**

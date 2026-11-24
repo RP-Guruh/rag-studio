@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"rag_project/internal/docling"
+	"rag_project/internal/embedding"
 	"rag_project/internal/projects"
 	"rag_project/internal/settings"
 )
@@ -86,7 +87,15 @@ func TestTrainingPipelineIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("build chunker: %v", err)
 	}
-	pipeline, err := NewPipeline(db, chunker, 90*time.Second, slog.Default())
+	embeddingKey, err := store.EmbeddingAPIKey()
+	if err != nil {
+		t.Fatalf("load embedding API key: %v", err)
+	}
+	embedder, err := embedding.New(cfg.EmbeddingModel, embeddingKey)
+	if err != nil {
+		t.Fatalf("build embedder: %v", err)
+	}
+	pipeline, err := NewPipeline(db, chunker, embedder, 90*time.Second, slog.Default())
 	if err != nil {
 		t.Fatalf("build pipeline: %v", err)
 	}
@@ -97,6 +106,13 @@ func TestTrainingPipelineIntegration(t *testing.T) {
 	if chunks == 0 {
 		t.Fatal("expected at least one chunk from Docling")
 	}
+	hits, err := db.SearchChunks(ctx, project.ID, make([]float32, cfg.EmbeddingModel.VectorDimension), 5)
+	if err != nil {
+		t.Fatalf("search chunks: %v", err)
+	}
+	if len(hits) != chunks {
+		t.Errorf("stored chunks = %d, want %d", len(hits), chunks)
+	}
 
 	loaded, err := db.GetDocument(ctx, project.ID, docs[0].ID)
 	if err != nil {
@@ -105,8 +121,8 @@ func TestTrainingPipelineIntegration(t *testing.T) {
 	if loaded == nil {
 		t.Fatal("document disappeared")
 	}
-	if loaded.Status != "chunked" {
-		t.Errorf("status = %q, want chunked", loaded.Status)
+	if loaded.Status != "indexed" {
+		t.Errorf("status = %q, want indexed", loaded.Status)
 	}
 	if loaded.ChunkCount != chunks {
 		t.Errorf("chunk_count = %d, want %d", loaded.ChunkCount, chunks)

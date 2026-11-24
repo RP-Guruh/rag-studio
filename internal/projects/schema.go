@@ -72,5 +72,82 @@ CREATE TABLE IF NOT EXISTS chunks (
 CREATE INDEX IF NOT EXISTS idx_chunks_project ON chunks(project_id);
 CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks
     USING hnsw (embedding vector_cosine_ops);
+
+-- Versioned schema history. Applied together with the DDL above.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    version    INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    applied_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO schema_migrations (version, name) VALUES (1, 'initial rag schema')
+    ON CONFLICT (version) DO NOTHING;
+INSERT INTO schema_migrations (version, name) VALUES (2, 'auth and evaluation')
+    ON CONFLICT (version) DO NOTHING;
+
+-- Small key/value store for application-wide switches.
+CREATE TABLE IF NOT EXISTS app_config (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
+-- Accounts and project assignments.
+CREATE TABLE IF NOT EXISTS users (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email         TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role          TEXT NOT NULL CHECK (role IN ('admin','user','guest')),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS user_projects (
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, project_id)
+);
+
+-- Retrieval tuning per project.
+CREATE TABLE IF NOT EXISTS project_retrieval (
+    project_id UUID PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+    top_k      INTEGER NOT NULL DEFAULT 8 CHECK (top_k BETWEEN 1 AND 20),
+    min_score  REAL    NOT NULL DEFAULT 0,
+    hybrid     BOOLEAN NOT NULL DEFAULT false,
+    rerank     BOOLEAN NOT NULL DEFAULT false,
+    guardrails    BOOLEAN NOT NULL DEFAULT false,
+    hybrid_weight REAL    NOT NULL DEFAULT 0.25,
+    rerank_weight REAL    NOT NULL DEFAULT 0.25
+);
+ALTER TABLE project_retrieval ADD COLUMN IF NOT EXISTS guardrails BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE project_retrieval ADD COLUMN IF NOT EXISTS hybrid_weight REAL NOT NULL DEFAULT 0.25;
+ALTER TABLE project_retrieval ADD COLUMN IF NOT EXISTS rerank_weight REAL NOT NULL DEFAULT 0.25;
+
+-- Reusable persona instruction templates.
+CREATE TABLE IF NOT EXISTS prompt_templates (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name         TEXT NOT NULL UNIQUE,
+    instructions TEXT NOT NULL DEFAULT '',
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO prompt_templates (name, instructions) VALUES
+    ('Concise analyst', 'Answer directly and briefly. Use bullet points for lists. Cite the document names you used.')
+    ON CONFLICT (name) DO NOTHING;
+INSERT INTO prompt_templates (name, instructions) VALUES
+    ('Support agent', 'Be friendly and helpful. Answer step by step when the question asks how to do something. If the knowledge base does not cover it, say so.')
+    ON CONFLICT (name) DO NOTHING;
+
+-- Evaluation sets used to verify that a project answers from its knowledge.
+CREATE TABLE IF NOT EXISTS eval_sets (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS eval_cases (
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    set_id               UUID NOT NULL REFERENCES eval_sets(id) ON DELETE CASCADE,
+    question             TEXT NOT NULL,
+    expected_answer      TEXT DEFAULT '',
+    expected_source_name TEXT DEFAULT '',
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 `, vectorDimension)
 }

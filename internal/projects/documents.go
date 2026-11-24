@@ -261,6 +261,24 @@ func (s *Store) ResetStaleProcessing(ctx context.Context, projectID string) (int
 	return tag.RowsAffected(), nil
 }
 
+// ResetDocumentForReindex resets one document, keeping other documents indexed.
+func (s *Store) ResetDocumentForReindex(ctx context.Context, projectID, documentID string) error {
+	if _, err := s.pool.Exec(ctx, `
+		DELETE FROM chunks WHERE project_id = $1 AND document_id = $2
+	`, projectID, documentID); err != nil {
+		return fmt.Errorf("delete document chunks: %w", err)
+	}
+	_, err := s.pool.Exec(ctx, `
+		UPDATE documents
+		SET status = 'pending', chunk_count = 0, error_message = NULL
+		WHERE project_id = $1 AND id = $2
+	`, projectID, documentID)
+	if err != nil {
+		return fmt.Errorf("reset document: %w", err)
+	}
+	return nil
+}
+
 // ResetDocumentsForReindex resets all documents in the project back to "pending"
 // and clears their chunk counts so training/indexing can run again completely.
 func (s *Store) ResetDocumentsForReindex(ctx context.Context, projectID string) (int64, error) {

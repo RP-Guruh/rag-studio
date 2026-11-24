@@ -1,19 +1,36 @@
 import * as ProjectService from '../../bindings/rag_project/internal/service/projectservice'
-import type { Project as BackendProject, PersonaConfig as BackendPersonaConfig, Document as BackendDocument } from '../../bindings/rag_project/internal/projects/models'
+import type {
+  Project as BackendProject,
+  PersonaConfig as BackendPersonaConfig,
+  Document as BackendDocument,
+  ChatAnswer as BackendChatAnswer,
+  ChunkHit as BackendChunkHit,
+  EvalSet as BackendEvalSet,
+  EvalCase as BackendEvalCase,
+  EvalReport as BackendEvalReport,
+  RetrievalConfig as BackendRetrievalConfig,
+  ChatDebug as BackendChatDebug
+} from '../../bindings/rag_project/internal/projects/models'
 import type { Progress as BackendTrainingProgress } from '../../bindings/rag_project/internal/training/models'
 import {
   mockStore,
   addFileToProject,
   removeFileFromProject,
   trainProjectKnowledge,
+  demoProject,
+  DEMO_PROJECT_ID,
+  isDemoProject,
   type KnowledgeFile,
   type Project,
   type PersonaConfig
 } from '../mock/data'
-import { isWailsRuntime } from './settings'
+import { waitForWailsRuntime } from './settings'
+import { isGuest } from './auth'
 
 export type { BackendProject, BackendPersonaConfig, BackendDocument }
 export type TrainingProgress = BackendTrainingProgress
+export type ChatAnswer = BackendChatAnswer
+export type ChunkHit = BackendChunkHit
 
 /** Largest document the backend accepts (50 MB). */
 export const MAX_DOCUMENT_BYTES = 50 * 1024 * 1024
@@ -26,7 +43,10 @@ export interface ImportDocumentsResult {
 }
 
 export async function listProjects(): Promise<Project[]> {
-  if (!isWailsRuntime) {
+  if (isGuest.value) {
+    return [demoProject]
+  }
+  if (!(await waitForWailsRuntime())) {
     return [...mockStore.projects]
   }
   try {
@@ -42,7 +62,10 @@ export async function listProjects(): Promise<Project[]> {
 }
 
 export async function getProject(id: string): Promise<Project | undefined> {
-  if (!isWailsRuntime) {
+  if (isDemoProject(id)) {
+    return demoProject
+  }
+  if (!(await waitForWailsRuntime())) {
     return mockStore.projects.find((p) => p.id === id)
   }
   try {
@@ -58,7 +81,7 @@ export async function getProject(id: string): Promise<Project | undefined> {
 }
 
 export async function createProject(name: string, description: string): Promise<Project> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const newProj: Project = {
       id: `proj-${Date.now()}`,
       name,
@@ -89,7 +112,7 @@ export async function createProject(name: string, description: string): Promise<
 }
 
 export async function updateProject(id: string, name: string, description: string): Promise<Project> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const p = mockStore.projects.find((item) => item.id === id)
     if (p) {
       p.name = name
@@ -112,7 +135,7 @@ export async function updateProject(id: string, name: string, description: strin
 }
 
 export async function deleteProject(id: string): Promise<void> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     mockStore.projects = mockStore.projects.filter((p) => p.id !== id)
     return
   }
@@ -121,7 +144,7 @@ export async function deleteProject(id: string): Promise<void> {
 }
 
 export async function saveProjectPersona(projectId: string, persona: PersonaConfig): Promise<void> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const p = mockStore.projects.find((item) => item.id === projectId)
     if (p) {
       p.persona = { ...persona }
@@ -194,56 +217,53 @@ export async function importDocuments(
   const imported: KnowledgeFile[] = []
   const errors: string[] = []
 
+  const valid: File[] = []
   for (const file of files) {
     const dotIndex = file.name.lastIndexOf('.')
     const extension = dotIndex >= 0 ? file.name.slice(dotIndex).toLowerCase() : ''
     if (!ACCEPTED_EXTENSIONS.includes(extension)) {
       errors.push(`${file.name}: unsupported file type (use PDF, Markdown, TXT, or Word)`)
-      continue
-    }
-    if (file.size > MAX_DOCUMENT_BYTES) {
+    } else if (file.size > MAX_DOCUMENT_BYTES) {
       errors.push(`${file.name}: file is larger than 50 MB`)
-      continue
-    }
-    if (file.size === 0) {
+    } else if (file.size === 0) {
       errors.push(`${file.name}: file is empty`)
-      continue
+    } else {
+      valid.push(file)
     }
+  }
 
-    if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
+    for (const file of valid) {
       const created = addFileToProject(projectId, {
         name: file.name,
         type: fileTypeFromName(file.name),
         size: formatFileSize(file.size)
       })
-      if (created) {
-        imported.push(created)
-      } else {
-        errors.push(`${file.name}: project not found`)
-      }
-      continue
+      if (created) imported.push(created)
+      else errors.push(`${file.name}: project not found`)
     }
+    return { imported, errors }
+  }
 
-    try {
-      const contentBase64 = await readFileAsBase64(file)
-      const documents = await ProjectService.ImportDocuments(projectId, [
-        {
-          filename: file.name,
-          mimeType: file.type || '',
-          contentBase64
-        }
-      ])
-      const document = documents && documents.length > 0 ? documents[0] : null
-      if (!document) {
-        errors.push(`${file.name}: upload failed`)
-        continue
-      }
-      const mapped = mapDocumentToKnowledgeFile(document)
-      imported.push(mapped)
-      appendFilesToStore(projectId, [mapped])
-    } catch (err) {
-      errors.push(`${file.name}: ${errorMessage(err)}`)
+  try {
+    const inputs = []
+    for (const file of valid) {
+      inputs.push({
+        filename: file.name,
+        mimeType: file.type || '',
+        contentBase64: await readFileAsBase64(file)
+      })
     }
+    const documents = await ProjectService.ImportDocuments(projectId, inputs)
+    if (!documents || documents.length === 0) {
+      errors.push('Upload failed: no documents were stored')
+    } else {
+      const mapped = documents.map(mapDocumentToKnowledgeFile)
+      imported.push(...mapped)
+      appendFilesToStore(projectId, mapped)
+    }
+  } catch (err) {
+    errors.push(`Upload failed: ${errorMessage(err)}`)
   }
 
   return { imported, errors }
@@ -251,7 +271,7 @@ export async function importDocuments(
 
 /** Deletes a document row from PostgreSQL and removes its local file. */
 export async function deleteDocument(projectId: string, fileId: string): Promise<void> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     removeFileFromProject(projectId, fileId)
     return
   }
@@ -264,7 +284,7 @@ export async function deleteDocument(projectId: string, fileId: string): Promise
  * snapshot; subsequent progress arrives through Wails events.
  */
 export async function trainProject(projectId: string): Promise<TrainingProgress | null> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     await trainProjectKnowledge(projectId)
     return null
   }
@@ -273,10 +293,149 @@ export async function trainProject(projectId: string): Promise<TrainingProgress 
 
 /** Returns the current training job for a project, if one exists. */
 export async function getTrainingStatus(projectId: string): Promise<TrainingProgress | null> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     return null
   }
   return ProjectService.GetTrainingStatus(projectId)
+}
+
+/** Embeds a question and retrieves the closest chunks of a project. */
+export async function retrieveChunks(
+  projectId: string,
+  query: string,
+  limit = 8
+): Promise<ChunkHit[]> {
+  if (!(await waitForWailsRuntime())) {
+    return []
+  }
+  const hits = await ProjectService.RetrieveChunks(projectId, query, limit)
+  return hits || []
+}
+
+export type EvalSet = BackendEvalSet
+export type EvalCase = BackendEvalCase
+export type EvalReport = BackendEvalReport
+export type RetrievalConfig = BackendRetrievalConfig
+export type ChatDebug = BackendChatDebug
+
+const DEFAULT_RETRIEVAL: RetrievalConfig = {
+  topK: 8,
+  minScore: 0,
+  hybrid: false,
+  rerank: false,
+  guardrails: false,
+  hybridWeight: 0.25,
+  rerankWeight: 0.25
+}
+
+export async function getRetrievalConfig(projectId: string): Promise<RetrievalConfig> {
+  if (!(await waitForWailsRuntime())) {
+    return DEFAULT_RETRIEVAL
+  }
+  const cfg = await ProjectService.GetRetrievalConfig(projectId)
+  return cfg || DEFAULT_RETRIEVAL
+}
+
+export async function updateRetrievalConfig(projectId: string, cfg: RetrievalConfig): Promise<void> {
+  if (!(await waitForWailsRuntime())) return
+  await ProjectService.UpdateRetrievalConfig(projectId, cfg)
+}
+
+export async function listEvalSets(projectId: string): Promise<EvalSet[]> {
+  if (!(await waitForWailsRuntime())) return []
+  return (await ProjectService.ListEvalSets(projectId)) || []
+}
+
+export async function createEvalSet(projectId: string, name: string): Promise<EvalSet> {
+  const set = await ProjectService.CreateEvalSet(projectId, name)
+  if (!set) throw new Error('Failed to create evaluation set')
+  return set
+}
+
+export async function listEvalCases(setId: string): Promise<EvalCase[]> {
+  if (!(await waitForWailsRuntime())) return []
+  return (await ProjectService.ListEvalCases(setId)) || []
+}
+
+export async function addEvalCase(setId: string, question: string, expectedAnswer: string, expectedSource: string): Promise<EvalCase> {
+  const evalCase = await ProjectService.AddEvalCase(setId, question, expectedAnswer, expectedSource)
+  if (!evalCase) throw new Error('Failed to add evaluation case')
+  return evalCase
+}
+
+export async function runEvaluation(setId: string): Promise<EvalReport> {
+  const report = await ProjectService.RunEvaluation(setId)
+  if (!report) throw new Error('Evaluation failed')
+  return report
+}
+
+export interface PromptTemplate {
+  id: string
+  name: string
+  instructions: string
+}
+
+export async function listPromptTemplates(): Promise<PromptTemplate[]> {
+  if (!(await waitForWailsRuntime())) return []
+  return (await ProjectService.ListPromptTemplates()) || []
+}
+
+export async function savePromptTemplate(name: string, instructions: string): Promise<PromptTemplate | null> {
+  if (!(await waitForWailsRuntime())) return null
+  return ProjectService.SavePromptTemplate(name, instructions)
+}
+
+export async function reindexDocument(projectId: string, documentId: string): Promise<void> {
+  if (!(await waitForWailsRuntime())) return
+  await ProjectService.ReindexDocument(projectId, documentId)
+}
+
+export async function cancelTraining(projectId: string): Promise<void> {
+  if (!(await waitForWailsRuntime())) return
+  await ProjectService.CancelTraining(projectId)
+}
+
+export async function cancelChat(projectId: string): Promise<void> {
+  if (!(await waitForWailsRuntime())) return
+  await ProjectService.CancelChat(projectId)
+}
+
+export async function exportProject(projectId: string): Promise<string> {
+  if (!(await waitForWailsRuntime())) return ''
+  return ProjectService.ExportProject(projectId)
+}
+
+export async function importProject(payload: string): Promise<BackendProject | null> {
+  if (!(await waitForWailsRuntime())) return null
+  return ProjectService.ImportProject(payload)
+}
+
+export async function backupAll(): Promise<string> {
+  if (!(await waitForWailsRuntime())) return ''
+  return ProjectService.BackupAll()
+}
+
+export async function restoreAll(payload: string): Promise<void> {
+  if (!(await waitForWailsRuntime())) return
+  await ProjectService.RestoreAll(payload)
+}
+
+export async function askProjectStream(projectId: string, question: string): Promise<ChatAnswer> {
+  const answer = await ProjectService.AskProjectStream(projectId, question)
+  if (!answer) throw new Error('The playground did not return an answer')
+  return answer
+}
+
+/** Asks the project a question using its persona and indexed knowledge. */
+export async function askProject(projectId: string, question: string): Promise<ChatAnswer> {
+  if (!(await waitForWailsRuntime())) {
+    throw new Error('The playground needs the desktop runtime to answer questions')
+  }
+  const answer = await ProjectService.AskProject(projectId, question)
+  if (!answer) {
+    throw new Error('The playground did not return an answer')
+  }
+  return answer
 }
 
 function appendFilesToStore(projectId: string, files: KnowledgeFile[]) {

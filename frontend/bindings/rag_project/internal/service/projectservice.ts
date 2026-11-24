@@ -12,6 +12,58 @@ import * as projects$0 from "../projects/models.js";
 // @ts-ignore: Unused imports
 import * as training$0 from "../training/models.js";
 
+/**
+ * AddEvalCase appends a test case to an evaluation set.
+ */
+export function AddEvalCase(setID: string, question: string, expectedAnswer: string, expectedSource: string): $CancellablePromise<projects$0.EvalCase | null> {
+    return $Call.ByID(3654610038, setID, question, expectedAnswer, expectedSource);
+}
+
+/**
+ * AskProject answers a question with the project's persona and knowledge.
+ * It returns the answer together with the sources and chunks used, so the UI
+ * can show real evidence instead of mock data.
+ */
+export function AskProject(projectID: string, question: string): $CancellablePromise<projects$0.ChatAnswer | null> {
+    return $Call.ByID(180262747, projectID, question);
+}
+
+/**
+ * AskProjectStream answers a question token by token. Tokens are emitted as
+ * Wails events (chat:token); the final ChatAnswer is also returned.
+ */
+export function AskProjectStream(projectID: string, question: string): $CancellablePromise<projects$0.ChatAnswer | null> {
+    return $Call.ByID(185840115, projectID, question);
+}
+
+/**
+ * BackupAll exports every project and its knowledge base as one JSON payload.
+ */
+export function BackupAll(): $CancellablePromise<string> {
+    return $Call.ByID(465741442);
+}
+
+/**
+ * CancelChat stops an in-flight streaming answer for a project.
+ */
+export function CancelChat(projectID: string): $CancellablePromise<void> {
+    return $Call.ByID(500457037, projectID);
+}
+
+/**
+ * CancelTraining stops an in-flight training job, if any.
+ */
+export function CancelTraining(projectID: string): $CancellablePromise<void> {
+    return $Call.ByID(2600286309, projectID);
+}
+
+/**
+ * CreateEvalSet adds an evaluation set to a project.
+ */
+export function CreateEvalSet(projectID: string, name: string): $CancellablePromise<projects$0.EvalSet | null> {
+    return $Call.ByID(1445650277, projectID, name);
+}
+
 export function CreateProject(name: string, description: string): $CancellablePromise<projects$0.Project | null> {
     return $Call.ByID(1651330478, name, description);
 }
@@ -27,8 +79,23 @@ export function DeleteProject(id: string): $CancellablePromise<void> {
     return $Call.ByID(4234103539, id);
 }
 
+/**
+ * ExportProject serializes a project's metadata, documents, file bytes and
+ * embedded chunks into a portable JSON payload.
+ */
+export function ExportProject(projectID: string): $CancellablePromise<string> {
+    return $Call.ByID(975591480, projectID);
+}
+
 export function GetProject(id: string): $CancellablePromise<projects$0.Project | null> {
     return $Call.ByID(1253198044, id);
+}
+
+/**
+ * GetRetrievalConfig returns the retrieval settings of a project.
+ */
+export function GetRetrievalConfig(projectID: string): $CancellablePromise<projects$0.RetrievalConfig | null> {
+    return $Call.ByID(4120368375, projectID);
 }
 
 /**
@@ -47,12 +114,75 @@ export function ImportDocuments(projectId: string, files: projects$0.DocumentInp
     return $Call.ByID(4123750842, projectId, files);
 }
 
+/**
+ * ImportProject restores a project from an ExportProject payload.
+ */
+export function ImportProject(payload: string): $CancellablePromise<projects$0.Project | null> {
+    return $Call.ByID(1717590993, payload);
+}
+
+/**
+ * ListEvalCases returns the test cases of an evaluation set.
+ */
+export function ListEvalCases(setID: string): $CancellablePromise<projects$0.EvalCase[] | null> {
+    return $Call.ByID(2624346236, setID);
+}
+
+/**
+ * ListEvalSets returns evaluation sets of a project.
+ */
+export function ListEvalSets(projectID: string): $CancellablePromise<projects$0.EvalSet[] | null> {
+    return $Call.ByID(3822138238, projectID);
+}
+
 export function ListProjects(): $CancellablePromise<projects$0.Project[] | null> {
     return $Call.ByID(245588115);
 }
 
+/**
+ * ListPromptTemplates returns reusable persona instruction templates.
+ */
+export function ListPromptTemplates(): $CancellablePromise<projects$0.PromptTemplate[] | null> {
+    return $Call.ByID(4059446466);
+}
+
 export function MigrateDatabase(): $CancellablePromise<void> {
     return $Call.ByID(243604363);
+}
+
+/**
+ * ReindexDocument resets a single document so only it is re-chunked and embedded.
+ */
+export function ReindexDocument(projectID: string, documentID: string): $CancellablePromise<void> {
+    return $Call.ByID(953406149, projectID, documentID);
+}
+
+/**
+ * RestoreAll imports every project from a BackupAll payload.
+ */
+export function RestoreAll(payload: string): $CancellablePromise<void> {
+    return $Call.ByID(1331235056, payload);
+}
+
+/**
+ * RetrieveChunks embeds a query and returns the closest chunks of one project.
+ */
+export function RetrieveChunks(projectID: string, query: string, limit: number): $CancellablePromise<projects$0.ChunkHit[] | null> {
+    return $Call.ByID(4197463151, projectID, query, limit);
+}
+
+/**
+ * RunEvaluation executes every case and reports answer/source matches.
+ */
+export function RunEvaluation(setID: string): $CancellablePromise<projects$0.EvalReport | null> {
+    return $Call.ByID(1308645408, setID);
+}
+
+/**
+ * SavePromptTemplate creates or updates a persona instruction template.
+ */
+export function SavePromptTemplate(name: string, instructions: string): $CancellablePromise<projects$0.PromptTemplate | null> {
+    return $Call.ByID(628019528, name, instructions);
 }
 
 /**
@@ -69,4 +199,11 @@ export function UpdatePersona(projectId: string, persona: projects$0.PersonaConf
 
 export function UpdateProject(id: string, name: string, description: string): $CancellablePromise<projects$0.Project | null> {
     return $Call.ByID(1015825473, id, name, description);
+}
+
+/**
+ * UpdateRetrievalConfig saves the retrieval settings of a project.
+ */
+export function UpdateRetrievalConfig(projectID: string, cfg: projects$0.RetrievalConfig): $CancellablePromise<void> {
+    return $Call.ByID(1226798726, projectID, cfg);
 }

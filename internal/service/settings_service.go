@@ -2,7 +2,11 @@ package service
 
 import (
 	"context"
+	"encoding/base64"
+	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"time"
 
 	"rag_project/internal/projects"
@@ -139,6 +143,34 @@ func (s *SettingsService) TestDocling(input settings.DoclingConnection) (setting
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	return settings.TestDocling(ctx, input, apiKey)
+}
+
+// BackupSettings returns the local SQLite database as base64 so the UI can
+// download a copy. Secrets stay in the OS keyring and are not included.
+func (s *SettingsService) BackupSettings() (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("locate config directory: %w", err)
+	}
+	path := filepath.Join(dir, "rag-studio", "settings.db")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read settings database: %w", err)
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+// RestoreSettings replaces the local SQLite database from a base64 backup.
+func (s *SettingsService) RestoreSettings(payload string) error {
+	data, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return fmt.Errorf("invalid backup payload: %w", err)
+	}
+	store, ok := s.repository.(*settings.Store)
+	if !ok {
+		return errors.New("settings restore is only available with the local store")
+	}
+	return store.RestoreFromBackup(data)
 }
 
 // ChatModelAPIKey returns the stored chat API key, or an empty string.

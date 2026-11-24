@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router'
+import { isAdmin } from '../../services/auth'
+import { t } from '../../i18n'
 
 const route = useRoute()
 
 const navItems = [
+  { name: t('settings.health'), path: '/settings/health' },
   { name: 'Chat model', path: '/settings/chat' },
   { name: 'Embedding model', path: '/settings/embedding' },
   { name: 'Database', path: '/settings/database' },
-  { name: 'Document processing', path: '/settings/docling' }
+  { name: 'Document processing', path: '/settings/docling' },
+  { name: t('settings.users'), path: '/settings/users', adminOnly: true }
 ]
 </script>
 
@@ -15,7 +19,7 @@ const navItems = [
   <div class="settings-page">
     <header class="settings-header">
       <div class="header-titles">
-        <h1 class="page-title">Settings</h1>
+        <h1 class="page-title">{{ t('settings.title') }}</h1>
         <p class="page-description">Configure language models, embedding vectors, the vector database, and document processing.</p>
       </div>
     </header>
@@ -25,7 +29,7 @@ const navItems = [
       <aside class="settings-nav-pane">
         <nav class="settings-nav">
           <router-link
-            v-for="item in navItems"
+            v-for="item in navItems.filter((nav) => !nav.adminOnly || isAdmin)"
             :key="item.path"
             :to="item.path"
             class="settings-nav-item"
@@ -120,7 +124,42 @@ const navItems = [
 
 .settings-content-pane {
   flex: 1;
+  min-width: 0;
   padding: var(--space-32);
   max-width: 680px;
+}
+
+@media (max-width: 900px) {
+  .settings-header,
+  .settings-content-pane {
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+
+  .settings-body {
+    flex-direction: column;
+  }
+
+  .settings-nav-pane {
+    width: 100%;
+    min-width: 0;
+    padding: var(--space-8) var(--space-16);
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+
+  .settings-nav-item {
+    white-space: nowrap;
+  }
+
+  .settings-content-pane {
+    max-width: none;
+  }
 }
 </style>

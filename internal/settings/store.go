@@ -17,6 +17,7 @@ import (
 type Store struct {
 	db      *sql.DB
 	secrets SecretStore
+	path    string
 }
 
 // Store must satisfy the Repository contract used by the Wails services.
@@ -54,7 +55,7 @@ func Open(path string, secrets SecretStore) (*Store, error) {
 	// SQLite allows a single writer; one connection avoids "database is locked".
 	db.SetMaxOpenConns(1)
 
-	s := &Store{db: db, secrets: secrets}
+	s := &Store{db: db, secrets: secrets, path: path}
 	if err := s.migrate(); err != nil {
 		db.Close()
 		return nil, err
@@ -148,6 +149,14 @@ ALTER TABLE embedding_model_settings
     ADD COLUMN tokenizer TEXT NOT NULL DEFAULT 'BAAI/bge-m3';
 `
 
+// schemaV4 stores the currently signed-in user id for the desktop session.
+const schemaV4 = `
+CREATE TABLE IF NOT EXISTS auth_session (
+    id      INTEGER PRIMARY KEY CHECK (id = 1),
+    user_id TEXT    NOT NULL
+) STRICT;
+`
+
 func (s *Store) migrate() error {
 	var version int
 	if err := s.db.QueryRow("PRAGMA user_version").Scan(&version); err != nil {
@@ -178,6 +187,77 @@ func (s *Store) migrate() error {
 		if _, err := s.db.Exec("PRAGMA user_version = 3"); err != nil {
 			return fmt.Errorf("record schema version: %w", err)
 		}
+		version = 3
+	}
+	if version < 4 {
+		if _, err := s.db.Exec(schemaV4); err != nil {
+			return fmt.Errorf("add auth session: %w", err)
+		}
+		if _, err := s.db.Exec("PRAGMA user_version = 4"); err != nil {
+			return fmt.Errorf("record schema version: %w", err)
+		}
+	}
+	return nil
+}
+
+// GetSession returns the signed-in user id, or an empty string.
+func (s *Store) GetSession() (string, error) {
+	var userID string
+	err := s.db.QueryRow(`SELECT user_id FROM auth_session WHERE id = 1`).Scan(&userID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read auth session: %w", err)
+	}
+	return userID, nil
+}
+
+// SetSession persists the signed-in user id.
+func (s *Store) SetSession(userID string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO auth_session (id, user_id) VALUES (1, ?)
+		ON CONFLICT(id) DO UPDATE SET user_id = excluded.user_id
+	`, userID)
+	if err != nil {
+		return fmt.Errorf("save auth session: %w", err)
+	}
+	return nil
+}
+
+// RestoreFromBackup replaces the SQLite file with a previously backed-up copy.
+// The connection is closed first so the replacement is applied cleanly.
+func (s *Store) RestoreFromBackup(data []byte) error {
+	if len(data) == 0 {
+		return errors.New("backup is empty")
+	}
+	if err := s.db.Close(); err != nil {
+		return fmt.Errorf("close settings database: %w", err)
+	}
+	if err := writeFileAtomic(s.path, data); err != nil {
+		_ = s.reopen()
+		return fmt.Errorf("write restored database: %w", err)
+	}
+	return s.reopen()
+}
+
+func (s *Store) reopen() error {
+	dsn := "file:" + filepath.ToSlash(s.path) +
+		"?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)"
+	db, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return fmt.Errorf("reopen settings database: %w", err)
+	}
+	db.SetMaxOpenConns(1)
+	s.db = db
+	return s.migrate()
+}
+
+// ClearSession removes the signed-in user.
+func (s *Store) ClearSession() error {
+	_, err := s.db.Exec(`DELETE FROM auth_session WHERE id = 1`)
+	if err != nil {
+		return fmt.Errorf("clear auth session: %w", err)
 	}
 	return nil
 }
@@ -538,6 +618,16 @@ func (s *Store) migrateIfNeeded() (bool, error) {
 			return false, fmt.Errorf("record schema version: %w", err)
 		}
 		needsMigration = true
+		version = 3
+	}
+	if version < 4 {
+		if _, err := s.db.Exec(schemaV4); err != nil {
+			return false, fmt.Errorf("add auth session: %w", err)
+		}
+		if _, err := s.db.Exec("PRAGMA user_version = 4"); err != nil {
+			return false, fmt.Errorf("record schema version: %w", err)
+		}
+		needsMigration = true
 	}
 	return needsMigration, nil
 }
@@ -659,6 +749,16 @@ func (s *Store) resolveSecret(name, incoming string, clear bool, currentSet bool
 		return true, SecretHint(incoming), nil
 	}
 	return currentSet, currentHint, nil
+}
+
+// SetSecret stores a raw secret in the configured secret store.
+func (s *Store) SetSecret(name, value string) error {
+	return s.secrets.Set(name, value)
+}
+
+// GetSecret reads a raw secret from the configured secret store.
+func (s *Store) GetSecret(name string) (string, error) {
+	return s.secrets.Get(name)
 }
 
 // Secret getters implementing Repository interface

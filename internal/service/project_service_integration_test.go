@@ -68,7 +68,7 @@ func TestTrainProjectIntegration(t *testing.T) {
 		t.Fatalf("got %d documents, want 1", len(docs))
 	}
 
-	service := NewProjectService(repo, training.NewManager(2))
+	service := NewProjectService(repo, training.NewManager(2), nil)
 	progress, err := service.TrainProject(project.ID)
 	if err != nil {
 		t.Fatalf("train project: %v", err)

@@ -73,12 +73,9 @@ func (s *Store) EnsureChunksVectorDimension(ctx context.Context, vectorDimension
 }
 
 // ReindexChunksVectorDimension forcibly resets chunks.embedding to the given
-// dimension. It drops the existing vector column and creates a fresh one with
-// the requested dimension, then recreates the HNSW index. Existing embedding
-// vectors are discarded. Use this only when changing the embedding model
-// dimension and the old vectors are no longer valid (for example, after
-// retraining with a new model). This operation is safe because the chunking-only
-// phase does not yet persist searchable embeddings to the vector index.
+// dimension. It is used when the configured embedding model changes: all old
+// vectors become invalid, so they are discarded together with their chunk rows
+// and every document is scheduled for re-indexing.
 func (s *Store) ReindexChunksVectorDimension(ctx context.Context, vectorDimension int) error {
 	if vectorDimension <= 0 {
 		return fmt.Errorf("vector dimension must be greater than 0")
@@ -86,47 +83,55 @@ func (s *Store) ReindexChunksVectorDimension(ctx context.Context, vectorDimensio
 	if s == nil || s.pool == nil {
 		return fmt.Errorf("store not initialized")
 	}
-	tx, err := s.pool.Begin(ctx)
+	return reindexChunksVectorDimension(ctx, s.pool, vectorDimension)
+}
+
+type schemaExecutor interface {
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
+// reindexChunksVectorDimension recreates the vector column with a valid default
+// and clears the chunks that can no longer be trusted. It runs in one transaction.
+func reindexChunksVectorDimension(ctx context.Context, db schemaExecutor, vectorDimension int) error {
+	tx, err := db.Begin(ctx)
 	if err != nil {
 		return fmt.Errorf("begin reindex transaction: %w", err)
 	}
 	defer tx.Rollback(ctx)
 
-	// Drop the old index if it exists.
 	if _, err := tx.Exec(ctx, `DROP INDEX IF EXISTS idx_chunks_embedding`); err != nil {
 		return fmt.Errorf("drop chunks embedding index: %w", err)
 	}
-
-	// Drop the old embedding column.
 	if _, err := tx.Exec(ctx, `ALTER TABLE chunks DROP COLUMN embedding`); err != nil {
 		return fmt.Errorf("drop old embedding column: %w", err)
 	}
-
-	// Add a new embedding column with the requested dimension.
+	zeroVector := VectorLiteral(make([]float32, vectorDimension))
 	if _, err := tx.Exec(ctx, fmt.Sprintf(
-		`ALTER TABLE chunks ADD COLUMN embedding vector(%d) NOT NULL DEFAULT '[]'::vector`,
-		vectorDimension,
+		`ALTER TABLE chunks ADD COLUMN embedding vector(%d) NOT NULL DEFAULT '%s'::vector`,
+		vectorDimension, zeroVector,
 	)); err != nil {
 		return fmt.Errorf("add new embedding column: %w", err)
 	}
-
-	// Recreate the HNSW index on the new column.
 	if _, err := tx.Exec(ctx, `
 		CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks
 			USING hnsw (embedding vector_cosine_ops)
 	`); err != nil {
 		return fmt.Errorf("recreate chunks embedding index: %w", err)
 	}
-
+	if _, err := tx.Exec(ctx, `DELETE FROM chunks`); err != nil {
+		return fmt.Errorf("delete stale chunks: %w", err)
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE documents SET status = 'pending', chunk_count = 0, error_message = NULL
+	`); err != nil {
+		return fmt.Errorf("reset documents for reindex: %w", err)
+	}
 	if err := tx.Commit(ctx); err != nil {
 		return fmt.Errorf("commit reindex transaction: %w", err)
 	}
 	return nil
-}
-
-type schemaExecutor interface {
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
 
 func ensureChunksVectorDimension(ctx context.Context, db schemaExecutor, vectorDimension int) error {
@@ -146,35 +151,7 @@ func ensureChunksVectorDimension(ctx context.Context, db schemaExecutor, vectorD
 	if ok && current == vectorDimension {
 		return nil
 	}
-
-	var hasRows bool
-	if err := db.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM chunks)`).Scan(&hasRows); err != nil {
-		return fmt.Errorf("check chunks table: %w", err)
-	}
-	if hasRows {
-		return fmt.Errorf(
-			"chunks.embedding uses %s but the configured embedding dimension is %d; re-index the documents after changing the embedding model",
-			columnType, vectorDimension,
-		)
-	}
-
-	if _, err := db.Exec(ctx, `DROP INDEX IF EXISTS idx_chunks_embedding`); err != nil {
-		return fmt.Errorf("drop chunks embedding index: %w", err)
-	}
-	alter := fmt.Sprintf(
-		`ALTER TABLE chunks ALTER COLUMN embedding TYPE vector(%d) USING embedding::vector(%d)`,
-		vectorDimension, vectorDimension,
-	)
-	if _, err := db.Exec(ctx, alter); err != nil {
-		return fmt.Errorf("alter chunks.embedding dimension: %w", err)
-	}
-	if _, err := db.Exec(ctx, `
-		CREATE INDEX IF NOT EXISTS idx_chunks_embedding ON chunks
-			USING hnsw (embedding vector_cosine_ops)
-	`); err != nil {
-		return fmt.Errorf("recreate chunks embedding index: %w", err)
-	}
-	return nil
+	return reindexChunksVectorDimension(ctx, db, vectorDimension)
 }
 
 func parseVectorDimension(columnType string) (int, bool) {

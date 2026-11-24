@@ -7,7 +7,8 @@ import FormField from '../components/FormField.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import { mockStore, type Project } from '../mock/data'
-import { listProjects, createProject, updateProject, deleteProject } from '../services/projects'
+import { listProjects, createProject, updateProject, deleteProject, importProject } from '../services/projects'
+import { t } from '../i18n'
 
 const router = useRouter()
 const isDialogOpen = ref(false)
@@ -111,6 +112,25 @@ async function confirmDeleteProject() {
 function navigateToProject(id: string) {
   router.push(`/projects/${id}`)
 }
+
+async function handleImportProject(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  try {
+    const payload = await file.text()
+    const created = await importProject(payload)
+    if (created) {
+      const list = await listProjects()
+      if (list.length > 0) mockStore.projects = list
+      router.push(`/projects/${created.id}`)
+    }
+  } catch (err: any) {
+    alert(err?.message || 'Failed to import project.')
+  } finally {
+    input.value = ''
+  }
+}
 </script>
 
 <template>
@@ -118,10 +138,13 @@ function navigateToProject(id: string) {
     <!-- Standard Page Header -->
     <header class="page-header">
       <div class="header-titles">
-        <h1 class="page-title">Projects</h1>
+        <h1 class="page-title">{{ t('dashboard.title') }}</h1>
         <p class="page-description">Manage RAG knowledge bases, retrieval settings, and personas.</p>
       </div>
-     
+      <label class="import-project-btn">
+        Import project
+        <input type="file" accept="application/json,.json" @change="handleImportProject" />
+      </label>
     </header>
 
     <!-- Content Area -->
@@ -135,8 +158,8 @@ function navigateToProject(id: string) {
             <tr>
               <th scope="col" class="th-main">Project</th>
               <th scope="col">Knowledge files</th>
-              <th scope="col">Persona</th>
-              <th scope="col">Last updated</th>
+              <th scope="col" class="col-optional">Persona</th>
+              <th scope="col" class="col-optional">Last updated</th>
               <th scope="col" class="th-action"><span class="sr-only">Actions</span></th>
             </tr>
           </thead>
@@ -156,10 +179,10 @@ function navigateToProject(id: string) {
               <td>
                 <span class="badge-count">{{ project.knowledgeFilesCount }} files</span>
               </td>
-              <td>
+              <td class="col-optional">
                 <span class="persona-name">{{ project.personaName }}</span>
               </td>
-              <td>
+              <td class="col-optional">
                 <time class="updated-time">{{ project.lastUpdated }}</time>
               </td>
               <td class="td-action">
@@ -350,6 +373,23 @@ function navigateToProject(id: string) {
   color: var(--color-text-muted);
 }
 
+.import-project-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 var(--space-12);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  cursor: pointer;
+}
+
+.import-project-btn input {
+  display: none;
+}
+
 .page-content {
   flex: 1;
   padding: var(--space-32);
@@ -364,13 +404,42 @@ function navigateToProject(id: string) {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .projects-table {
   width: 100%;
+  min-width: 560px;
   border-collapse: collapse;
   text-align: left;
+}
+
+@media (max-width: 900px) {
+  .page-header,
+  .page-content {
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+}
+
+@media (max-width: 700px) {
+  .col-optional {
+    display: none;
+  }
+
+  .projects-table {
+    min-width: 480px;
+  }
+}
+
+@media (max-width: 600px) {
+  .page-header {
+    flex-wrap: wrap;
+  }
+
+  .page-content {
+    padding: var(--space-16);
+  }
 }
 
 .projects-table th {

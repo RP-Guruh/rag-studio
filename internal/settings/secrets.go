@@ -27,6 +27,52 @@ type SecretStore interface {
 	Delete(name string) error
 }
 
+// NewServerSecretStore reads secrets from environment variables first and
+// falls back to the encrypted file. It is used for container/server installs
+// where an OS keyring is not available.
+func NewServerSecretStore(dataDir string) SecretStore {
+	return &envSecrets{fallback: &fileSecrets{dir: dataDir}}
+}
+
+type envSecrets struct {
+	fallback SecretStore
+}
+
+func secretEnvName(name string) string {
+	switch name {
+	case secretChatModel:
+		return "RAG_STUDIO_CHAT_API_KEY"
+	case secretEmbeddingModel:
+		return "RAG_STUDIO_EMBEDDING_API_KEY"
+	case secretDatabase:
+		return "RAG_STUDIO_DB_PASSWORD"
+	case secretDocling:
+		return "RAG_STUDIO_DOCLING_API_KEY"
+	default:
+		return ""
+	}
+}
+
+func (e *envSecrets) Get(name string) (string, error) {
+	if envName := secretEnvName(name); envName != "" {
+		if value := os.Getenv(envName); value != "" {
+			return value, nil
+		}
+	}
+	return e.fallback.Get(name)
+}
+
+func (e *envSecrets) Set(name, value string) error {
+	if envName := secretEnvName(name); envName != "" && os.Getenv(envName) != "" {
+		return nil
+	}
+	return e.fallback.Set(name, value)
+}
+
+func (e *envSecrets) Delete(name string) error {
+	return e.fallback.Delete(name)
+}
+
 // NewSecretStore prefers the OS keyring (Secret Service, Keychain, Credential
 // Manager) and transparently falls back to an AES-GCM encrypted file when the
 // keyring is unavailable, for example on a headless Linux host.

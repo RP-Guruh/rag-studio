@@ -2,7 +2,7 @@
 
 RAG Studio adalah aplikasi desktop untuk menyiapkan project RAG. Tiap project punya dokumen dan persona sendiri, jadi knowledge base satu project tidak tercampur dengan project lain. Model chat, model embedding, PostgreSQL, dan Docling diisi lewat halaman Settings.
 
-Saat ini konfigurasi, project, dokumen, dan chunking sudah berjalan. Playground dan tahap embedding belum terhubung; keduanya masih memakai data contoh. Rinciannya ada di [Status implementasi](#status-implementasi).
+Saat ini konfigurasi, project, dokumen, chunking, embedding, dan Playground sudah terhubung ke backend. Login dengan akun masih belum tersedia. Rinciannya ada di [Status implementasi](#status-implementasi).
 
 ## Daftar isi
 
@@ -25,7 +25,7 @@ Tiap project menyimpan dokumen dan persona sendiri. Persona berisi nama, peran, 
 
 Model dan layanan dipilih lewat Settings: chat model, embedding model, PostgreSQL + pgvector, dan Docling. Aplikasi tidak mengikat ke penyedia tertentu.
 
-Playground dipakai untuk mencoba project. Isinya masih data contoh.
+Playground dipakai untuk mencoba project: pertanyaan dijawab dari dokumen yang sudah di-index dengan memakai persona project.
 
 Konfigurasi lokal ada di SQLite. Kunci API dan password tidak disimpan di sana.
 
@@ -35,13 +35,16 @@ Konfigurasi lokal ada di SQLite. Kunci API dan password tidak disimpan di sana.
 | --- | --- | --- |
 | Settings (Chat model, Embedding model, Database, Document processing) | Sudah | Disimpan di SQLite, kunci API dan password di keyring. Tiap bagian punya tombol Test connection. |
 | Migrasi skema PostgreSQL | Sudah | Jalan saat Database disimpan. Butuh vector dimension dari Embedding model. |
-| Login | Sebagian | Continue as guest berfungsi. Sign-in dinonaktifkan. |
+| Login & akun | Sudah | Register pertama menjadi admin; admin membuat sub-user dan memplot project. Guest bisa mencoba project demo read-only. |
 | Project (buat, ubah, hapus, daftar) | Sudah | Tersimpan di tabel `projects`. |
 | Persona per project | Sudah | Tersimpan di tabel `project_personas` (1:1). |
 | Upload dokumen (PDF, MD, TXT, DOC, DOCX; maks. 50 MB) | Sudah | File disimpan lokal, metadata di tabel `documents`. Dedup memakai SHA-256. |
 | Training / chunking via Docling | Sudah | Status `pending → processing → chunked`. Progres lewat event Wails. |
-| Embedding dan penyimpanan vektor | Belum | Kolom `chunks.embedding vector(N)` dan indeks HNSW sudah ada, tapi pipeline belum mengisinya. |
-| Playground (chat, sources, retrieved chunks) | Sebagian | Berjalan dari `frontend/src/mock/data.ts`. Belum memakai pgvector atau chat model. |
+| Embedding dan penyimpanan vektor | Sudah | Setiap chunk di-embed lewat provider yang dikonfigurasi, disimpan ke `chunks.embedding`, lalu dokumen ditandai `indexed`. |
+| Playground (chat, sources, retrieved chunks) | Sudah | Chat streaming per token dengan tombol Stop, sources & retrieved chunks nyata, serta panel debug (system prompt, latensi, top-K). |
+| Evaluation | Sudah | Set/case evaluasi per project dengan metrik answer/source match. |
+| Retrieval tuning | Sebagian | Top-K, min score, hybrid search, rerank, dan guardrails per project. |
+| Export/import & backup | Sebagian | Export/import project beserta file dan vektor; backup SQLite. Restore penuh belum ada. |
 
 ## Stack teknologi
 
@@ -122,7 +125,7 @@ flowchart TD
     H --> I["File disimpan lokal + baris documents<br/>status = pending"]
     I --> J["Train project / Re-index knowledge base"]
     J --> K["Docling hybrid chunking<br/>status = processing → chunked"]
-    K -->|"berhasil"| L["status = indexed (target)"]
+    K -->|"embed + simpan vector"| L["status = indexed"]
     K -->|"error / timeout"| M["status = failed + error_message"]
     J --> N["Event training:progress / training:finished"]
     G --> O["Playground<br/>pilih project, chat, lihat sources & retrieved chunks (mock)"]
@@ -278,6 +281,23 @@ erDiagram
     └── docling/                # adapter doclingclient → Chunker
 ```
 
+## Deployment & download
+
+Installer didistribusikan lewat **GitHub Releases**: `https://github.com/RP-Guruh/rag-studio/releases`.
+Aplikasi bisa mengecek versi terbaru dan mengunduh aset yang sesuai dengan sistem operasi lewat Settings → Setup & health.
+
+Pembagian tanggung jawab:
+
+| Komponen | Desktop (local stack) | Server/team |
+| --- | --- | --- |
+| SQLite, file dokumen, keyring | Otomatis oleh aplikasi | Otomatis di volume `/data` |
+| PostgreSQL + pgvector | Docker Compose bawaan (`Settings → Setup & health → Start local stack`) | Docker Compose server |
+| Docling | Docker Compose bawaan | Docker Compose server |
+| Ollama | **Diinstal user sendiri** dari ollama.com/download | Disiapkan operator (atau pakai API eksternal) |
+| API key model | Diisi user di Settings | Environment variable / secret store |
+
+Lihat `deploy/local/docker-compose.yml` dan `deploy/server/docker-compose.yml`. Mode server diaktifkan dengan `RAG_STUDIO_SERVER=1`; rahasia dibaca dari `RAG_STUDIO_*` environment variable.
+
 ## Instalasi dan menjalankan
 
 Prasyarat:
@@ -336,9 +356,16 @@ Test unit jalan tanpa layanan eksternal. Test live dilewati kecuali environment 
 
 ## Roadmap
 
-- [ ] Isi `chunks.embedding` setelah Docling selesai memotong dokumen.
-- [ ] Retrieval HNSW per project (`WHERE project_id = ... ORDER BY embedding <=> $query`).
-- [ ] Jawaban RAG memakai chat model dan persona (`strict_knowledge`, tone, bahasa).
-- [ ] Playground memakai retrieval dan chat, bukan data contoh.
-- [ ] Login dengan akun.
-- [ ] Migrasi skema berversi, misalnya tabel `schema_migrations`, menggantikan `ALTER TABLE` inline.
+- [x] Isi `chunks.embedding` setelah Docling selesai memotong dokumen.
+- [x] Retrieval HNSW per project (`WHERE project_id = ... ORDER BY embedding <=> $query`).
+- [x] Jawaban RAG memakai chat model dan persona (`strict_knowledge`, tone, bahasa).
+- [x] Playground memakai retrieval dan chat, bukan data contoh.
+- [x] Login dengan akun (admin + sub-user + guest demo).
+- [x] Migrasi skema berversi dengan tabel `schema_migrations`.
+- [x] Streaming jawaban dan tombol Stop.
+- [x] Export/import project dan backup SQLite.
+- [x] Health dashboard (Settings → Setup & health).
+- [x] Restore penuh dari backup (SQLite + semua project/vektor).
+- [x] Lokalisasi UI (English/Indonesia) dan pemeriksaan update GitHub.
+- [x] Bobot hybrid/rerank yang bisa diatur per project.
+- [x] Metadata Docling (heading, caption, doc item) tampil di panel retrieved chunks.

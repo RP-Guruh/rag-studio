@@ -1,21 +1,52 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted } from 'vue'
+import { Events } from '@wailsio/runtime'
 import BaseButton from '../components/BaseButton.vue'
 import EmptyState from '../components/EmptyState.vue'
 import {
   mockStore,
   sendPlaygroundMessage,
-  clearPlaygroundMessages
+  clearPlaygroundMessages,
+  isDemoProject,
+  type ChatMessage,
+  type RetrievedChunk
 } from '../mock/data'
+import { isGuest } from '../services/auth'
+import {
+  askProject,
+  askProjectStream,
+  cancelChat,
+  listProjects,
+  type ChunkHit,
+  type ChatDebug
+} from '../services/projects'
+import { waitForWailsRuntime } from '../services/settings'
+import { t } from '../i18n'
+import { renderMarkdown } from '../utils/markdown'
 
 const selectedProjectId = ref(mockStore.playground.selectedProjectId || mockStore.projects[0]?.id || '')
 const inputQuery = ref('')
-const isSidePanelOpen = ref(true)
+const isSidePanelOpen = ref(
+  typeof window === 'undefined' || window.innerWidth > 1100
+)
+const isSending = ref(false)
+const sendError = ref('')
+const debugInfo = ref<ChatDebug | null>(null)
 const chatScrollContainer = ref<HTMLElement | null>(null)
 
 const activeProject = computed(() =>
   mockStore.projects.find((p) => p.id === selectedProjectId.value)
 )
+
+const personaSummary = computed(() => {
+  const persona = activeProject.value?.persona
+  if (!persona) return ''
+  const language = !persona.answerLanguage || persona.answerLanguage === 'auto'
+    ? 'Auto'
+    : persona.answerLanguage
+  const grounding = persona.strictKnowledge ? 'strict' : 'general'
+  return `${persona.name} · ${persona.tone} · ${language} · ${grounding}`
+})
 
 const currentMessages = computed(() => {
   return mockStore.playground.messages[selectedProjectId.value] || []
@@ -25,24 +56,130 @@ const currentChunks = computed(() => {
   return mockStore.playground.lastRetrievedChunks[selectedProjectId.value] || []
 })
 
+onMounted(async () => {
+  const projects = await listProjects()
+  if (projects.length > 0) {
+    mockStore.projects = projects
+  }
+  if (isGuest.value) {
+    selectedProjectId.value = 'demo-solaria'
+  } else if (!mockStore.projects.some((p) => p.id === selectedProjectId.value)) {
+    selectedProjectId.value = mockStore.projects[0]?.id || ''
+  }
+  mockStore.playground.selectedProjectId = selectedProjectId.value
+})
+
 function handleProjectChange() {
   mockStore.playground.selectedProjectId = selectedProjectId.value
+  sendError.value = ''
 }
 
 function handleClearChat() {
   clearPlaygroundMessages(selectedProjectId.value)
+  sendError.value = ''
+}
+
+function timestamp(): string {
+  return new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+}
+
+function appendMessage(projectId: string, message: ChatMessage) {
+  if (!mockStore.playground.messages[projectId]) {
+    mockStore.playground.messages[projectId] = []
+  }
+  mockStore.playground.messages[projectId].push(message)
+}
+
+function mapChunk(chunk: ChunkHit): RetrievedChunk {
+  const metadata = (chunk.metadata || {}) as Record<string, unknown>
+  const headings = Array.isArray(metadata.headings)
+    ? (metadata.headings as string[]).join(' › ')
+    : ''
+  const captions = Array.isArray(metadata.captions)
+    ? (metadata.captions as string[]).join(', ')
+    : ''
+  const parts = [
+    chunk.pageNumber > 0 ? `Page ${chunk.pageNumber}` : `Chunk ${chunk.chunkIndex}`,
+    headings,
+    captions
+  ].filter(Boolean)
+  const location = parts.join(' · ')
+  const excerpt = chunk.content.length > 220
+    ? `${chunk.content.slice(0, 220)}…`
+    : chunk.content
+  return {
+    id: `chunk-${chunk.chunkId}`,
+    fileName: chunk.documentName,
+    location,
+    excerpt
+  }
+}
+
+async function scrollToBottom() {
+  await nextTick()
+  if (chatScrollContainer.value) {
+    chatScrollContainer.value.scrollTop = chatScrollContainer.value.scrollHeight
+  }
 }
 
 async function handleSendMessage() {
   const query = inputQuery.value.trim()
-  if (!query || !selectedProjectId.value) return
+  if (!query || !selectedProjectId.value || isSending.value) return
 
-  sendPlaygroundMessage(selectedProjectId.value, query)
+  const projectId = selectedProjectId.value
   inputQuery.value = ''
+  sendError.value = ''
+  debugInfo.value = null
 
-  await nextTick()
-  if (chatScrollContainer.value) {
-    chatScrollContainer.value.scrollTop = chatScrollContainer.value.scrollHeight
+  if (isGuest.value || isDemoProject(projectId) || !(await waitForWailsRuntime())) {
+    sendPlaygroundMessage(projectId, query)
+    await scrollToBottom()
+    return
+  }
+
+  appendMessage(projectId, {
+    id: `msg-user-${Date.now()}`,
+    role: 'user',
+    content: query,
+    timestamp: timestamp()
+  })
+
+  const assistantId = `msg-assistant-${Date.now()}`
+  appendMessage(projectId, {
+    id: assistantId,
+    role: 'assistant',
+    content: '',
+    timestamp: timestamp()
+  })
+  const placeholder = mockStore.playground.messages[projectId]?.find((msg) => msg.id === assistantId)
+  isSending.value = true
+  await scrollToBottom()
+
+  const unsubscribe = Events.On('chat:token', (event: { data: unknown }) => {
+    const data = event.data as { projectId?: string; token?: string }
+    if (data?.projectId === projectId && placeholder) {
+      placeholder.content += data.token || ''
+      void scrollToBottom()
+    }
+  })
+
+  try {
+    const answer = await askProjectStream(projectId, query)
+    if (placeholder) {
+      placeholder.content = answer.answer
+      placeholder.sources = (answer.sources || []).map((source) => source.fileName)
+    }
+    mockStore.playground.lastRetrievedChunks[projectId] = (answer.chunks || []).map(mapChunk)
+    debugInfo.value = answer.debug || null
+  } catch (err) {
+    sendError.value = err instanceof Error ? err.message : String(err)
+    if (placeholder) {
+      placeholder.content = placeholder.content || `Could not answer: ${sendError.value}`
+    }
+  } finally {
+    unsubscribe()
+    isSending.value = false
+    await scrollToBottom()
   }
 }
 
@@ -74,6 +211,12 @@ function toggleSidePanel() {
         <span v-if="activeProject" class="persona-tag">
           {{ activeProject.personaName }}
         </span>
+        <span v-if="personaSummary" class="persona-summary">
+          {{ personaSummary }}
+        </span>
+        <span v-if="activeProject?.description" class="project-context-hint" :title="activeProject.description">
+          {{ activeProject.description }}
+        </span>
       </div>
 
       <div class="header-actions">
@@ -98,6 +241,10 @@ function toggleSidePanel() {
       </div>
     </header>
 
+    <div v-if="isGuest" class="demo-banner">
+      Demo mode — sample answers only. Register to test your own knowledge base.
+    </div>
+
     <!-- Main Playground Workspace -->
     <div class="playground-workspace">
       <!-- Chat Conversation Column -->
@@ -117,7 +264,12 @@ function toggleSidePanel() {
                   </span>
                   <span class="message-time">{{ msg.timestamp }}</span>
                 </div>
-                <div class="message-body">
+                <div
+                  v-if="msg.role === 'assistant'"
+                  class="message-body markdown-body"
+                  v-html="renderMarkdown(msg.content)"
+                />
+                <div v-else class="message-body">
                   {{ msg.content }}
                 </div>
                 <div v-if="msg.sources && msg.sources.length > 0" class="message-sources">
@@ -132,12 +284,22 @@ function toggleSidePanel() {
           <EmptyState
             v-else
             title="Playground is empty"
-            description="Send a message below to test retrieval answers and review retrieved document chunks."
+            description="Train a project's knowledge base, then ask a question below to test its answer."
           />
+
+          <div v-if="isSending" class="sending-indicator">
+            Retrieving knowledge and generating an answer…
+          </div>
         </div>
 
         <!-- Input Bar Pinned to Bottom -->
         <div class="input-bar-container">
+          <div v-if="sendError" class="send-error">{{ sendError }}</div>
+          <div v-if="isSending" class="stop-row">
+            <BaseButton variant="secondary" size="sm" type="button" @click="cancelChat(selectedProjectId)">
+              {{ t('playground.stop') }}
+            </BaseButton>
+          </div>
           <form class="input-bar-form" @submit.prevent="handleSendMessage">
             <input
               v-model="inputQuery"
@@ -148,9 +310,9 @@ function toggleSidePanel() {
             <BaseButton
               variant="primary"
               type="submit"
-              :disabled="!inputQuery.trim() || !selectedProjectId"
+              :disabled="!inputQuery.trim() || !selectedProjectId || isSending"
             >
-              Send
+              {{ isSending ? '…' : t('playground.send') }}
             </BaseButton>
           </form>
         </div>
@@ -182,6 +344,14 @@ function toggleSidePanel() {
           <div v-else class="chunks-empty">
             <p>No chunks retrieved for this session yet.</p>
           </div>
+
+          <div v-if="debugInfo" class="debug-panel">
+            <h3 class="debug-title">Last request</h3>
+            <p class="debug-meta">
+              {{ debugInfo.latencyMs }} ms · top K {{ debugInfo.topK }}
+            </p>
+            <pre class="debug-prompt">{{ debugInfo.systemPrompt }}</pre>
+          </div>
         </div>
       </aside>
     </div>
@@ -198,22 +368,39 @@ function toggleSidePanel() {
 }
 
 .playground-header {
-  height: 56px;
   min-height: 56px;
-  padding: 0 var(--space-24);
+  padding: var(--space-12) var(--space-24);
   background-color: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-12);
   min-width: 0;
 }
 
 .project-selector-group {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: var(--space-12);
-  flex-wrap: nowrap;
+  min-width: 0;
+}
+
+.persona-summary {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.project-context-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .selector-label {
@@ -233,6 +420,7 @@ function toggleSidePanel() {
   font-size: var(--font-size-sm);
   font-weight: var(--font-weight-medium);
   max-width: 260px;
+  min-width: 0;
 }
 
 .persona-tag {
@@ -252,11 +440,20 @@ function toggleSidePanel() {
   gap: var(--space-8);
 }
 
+.demo-banner {
+  padding: var(--space-8) var(--space-24);
+  background-color: var(--color-accent-subtle);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
+}
+
 .playground-workspace {
   flex: 1;
   display: flex;
   overflow: hidden;
   min-width: 0;
+  position: relative;
 }
 
 .chat-column {
@@ -282,8 +479,8 @@ function toggleSidePanel() {
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
-  max-width: 840px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
   min-width: 0;
 }
@@ -302,14 +499,51 @@ function toggleSidePanel() {
 }
 
 .message-bubble {
+  position: relative;
   max-width: 85%;
   width: fit-content;
+  min-width: 0;
   padding: var(--space-16);
   border-radius: var(--radius-md);
   display: flex;
   flex-direction: column;
   gap: var(--space-4);
   word-break: break-word;
+}
+
+/* Comic-style tail: border triangle behind, surface triangle in front. */
+.message-bubble::before,
+.message-bubble::after {
+  content: '';
+  position: absolute;
+  top: 18px;
+  width: 0;
+  height: 0;
+  border-style: solid;
+}
+
+.message-row--user .message-bubble::before {
+  left: 100%;
+  border-width: 7px 0 7px 8px;
+  border-color: transparent transparent transparent var(--color-border);
+}
+
+.message-row--user .message-bubble::after {
+  left: calc(100% - 1px);
+  border-width: 6px 0 6px 7px;
+  border-color: transparent transparent transparent var(--color-surface);
+}
+
+.message-row--assistant .message-bubble::before {
+  left: -8px;
+  border-width: 7px 8px 7px 0;
+  border-color: transparent var(--color-border) transparent transparent;
+}
+
+.message-row--assistant .message-bubble::after {
+  left: -7px;
+  border-width: 6px 7px 6px 0;
+  border-color: transparent var(--color-surface) transparent transparent;
 }
 
 .message-row--user .message-bubble {
@@ -320,6 +554,13 @@ function toggleSidePanel() {
 .message-row--assistant .message-bubble {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
+  width: fit-content;
+  max-width: min(90%, 720px);
+  padding: var(--space-20);
+}
+
+.message-row--assistant .message-meta {
+  margin-bottom: var(--space-8);
 }
 
 .message-meta {
@@ -349,6 +590,95 @@ function toggleSidePanel() {
   white-space: pre-wrap;
 }
 
+.markdown-body {
+  white-space: normal;
+  min-width: 0;
+  line-height: 1.65;
+  overflow-wrap: break-word;
+}
+
+.markdown-body p {
+  margin: 0 0 var(--space-12);
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body strong {
+  font-weight: var(--font-weight-medium);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  margin: var(--space-8) 0 var(--space-12);
+  padding-left: var(--space-20);
+}
+
+.markdown-body ul:last-child,
+.markdown-body ol:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body li + li {
+  margin-top: var(--space-12);
+}
+
+.markdown-body li::marker {
+  color: var(--color-text-muted);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  font-size: var(--font-size-base);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--space-8);
+}
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  background-color: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 1px 4px;
+}
+
+.markdown-body pre {
+  margin: var(--space-8) 0 0;
+  padding: var(--space-12);
+  background-color: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  overflow-x: auto;
+}
+
+.markdown-body pre code {
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.markdown-body a {
+  color: var(--color-accent);
+  text-decoration: underline;
+}
+
+.markdown-body blockquote {
+  margin: var(--space-8) 0 0;
+  padding-left: var(--space-12);
+  border-left: 1px solid var(--color-border-strong);
+  color: var(--color-text-muted);
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--color-border);
+  margin: var(--space-12) 0;
+}
+
 .message-sources {
   margin-top: var(--space-8);
   padding-top: var(--space-8);
@@ -370,17 +700,39 @@ function toggleSidePanel() {
   font-size: 12px;
 }
 
+.sending-indicator {
+  align-self: center;
+  padding: var(--space-8) var(--space-16);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+}
+
+.send-error {
+  max-width: none;
+  margin: 0 0 var(--space-8);
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
+}
+
 .input-bar-container {
   padding: var(--space-16) var(--space-24);
   background-color: var(--color-surface);
   border-top: 1px solid var(--color-border);
 }
 
+.stop-row {
+  max-width: none;
+  margin-bottom: var(--space-8);
+}
+
 .input-bar-form {
   display: flex;
   gap: var(--space-8);
-  max-width: 840px;
-  margin: 0 auto;
+  max-width: none;
+  margin: 0;
   width: 100%;
 }
 
@@ -485,7 +837,94 @@ function toggleSidePanel() {
   color: var(--color-text-muted);
 }
 
+.debug-panel {
+  margin-top: var(--space-16);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-border);
+}
+
+.debug-title {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  margin: 0 0 var(--space-4);
+}
+
+.debug-meta {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  margin: 0 0 var(--space-8);
+}
+
+.debug-prompt {
+  margin: 0;
+  padding: var(--space-8);
+  background-color: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .font-mono {
   font-family: var(--font-mono);
+}
+
+/* Below this width the retrieved-chunks panel overlays instead of taking
+   space away from the chat column. */
+@media (max-width: 1100px) {
+  .chunks-panel {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    width: 260px;
+    min-width: 260px;
+    max-width: 260px;
+    box-shadow: var(--shadow-floating);
+  }
+}
+
+@media (max-width: 900px) {
+  .playground-header {
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+
+  .messages-container,
+  .input-bar-container {
+    padding-left: var(--space-16);
+    padding-right: var(--space-16);
+  }
+}
+
+@media (max-width: 600px) {
+  .persona-summary,
+  .project-context-hint {
+    white-space: normal;
+    width: 100%;
+    max-width: none;
+  }
+
+  .chunks-panel {
+    width: calc(100% - var(--space-32));
+    min-width: 0;
+    max-width: none;
+  }
+
+  .message-bubble {
+    max-width: 100%;
+  }
+
+  .input-bar-form {
+    flex-wrap: wrap;
+  }
+
+  .input-bar-form .btn {
+    width: 100%;
+  }
 }
 </style>

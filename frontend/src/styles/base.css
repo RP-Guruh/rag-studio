@@ -20,8 +20,16 @@ body {
   line-height: var(--line-height-normal);
   color: var(--color-text);
   background-color: var(--color-bg);
+  overflow-x: hidden;
+  overflow-wrap: break-word;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+img,
+svg,
+video {
+  max-width: 100%;
 }
 
 #app {
@@ -145,4 +153,25 @@ select option,
 select optgroup {
   background-color: var(--color-surface) !important;
   color: var(--color-text) !important;
+}
+
+/* Shared responsive rules for forms and action rows across all pages. */
+@media (max-width: 600px) {
+  .form-grid-2,
+  .form-row-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .form-actions-row,
+  .header-actions,
+  .files-header-row,
+  .files-header-left,
+  .files-header-actions {
+    flex-wrap: wrap;
+  }
+
+  .form-actions-row .btn,
+  .files-header-actions .btn {
+    width: 100%;
+  }
 }

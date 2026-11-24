@@ -222,6 +222,64 @@ export const mockStore = reactive<AppState>({
   }
 })
 
+export const DEMO_PROJECT_ID = 'demo-solaria'
+
+export const demoProject: Project = {
+  id: DEMO_PROJECT_ID,
+  name: 'Demo — Solaria',
+  description: 'Sample project: menu, prices and nutrition facts. Read-only preview for guests.',
+  knowledgeFilesCount: 1,
+  personaName: 'Mbak Inem',
+  lastUpdated: new Date().toISOString().split('T')[0],
+  files: [
+    {
+      id: 'demo-doc-1',
+      name: 'solaria_menu.pdf',
+      type: 'PDF',
+      size: '16 KB',
+      addedDate: new Date().toISOString().split('T')[0],
+      status: 'Ready',
+      chunksCount: 9
+    }
+  ],
+  persona: {
+    name: 'Mbak Inem',
+    role: 'Restaurant receptionist',
+    instructions: 'Answer from the menu document in a friendly way.',
+    tone: 'Friendly',
+    answerLanguage: 'Indonesian',
+    strictKnowledge: true
+  }
+}
+
+mockStore.playground.messages[DEMO_PROJECT_ID] = [
+  {
+    id: 'demo-msg-1',
+    role: 'user',
+    content: 'Apa saja menu spesial di Solaria?',
+    timestamp: 'Demo'
+  },
+  {
+    id: 'demo-msg-2',
+    role: 'assistant',
+    content: 'Menu spesial antara lain **Spaghetti Bolognaise**, **Nasi + Ayam Crispy Black Pepper Sauce**, dan **Fish & Chips**.',
+    timestamp: 'Demo',
+    sources: ['solaria_menu.pdf']
+  }
+]
+mockStore.playground.lastRetrievedChunks[DEMO_PROJECT_ID] = [
+  {
+    id: 'demo-chunk-1',
+    fileName: 'solaria_menu.pdf',
+    location: 'Page 1',
+    excerpt: 'Daftar menu spesial beserta harga dan informasi kalori.'
+  }
+]
+
+export function isDemoProject(id: string): boolean {
+  return id === DEMO_PROJECT_ID
+}
+
 /* Helper functions to operate local mock state */
 export function signInAsGuest() {
   mockStore.currentUser = {

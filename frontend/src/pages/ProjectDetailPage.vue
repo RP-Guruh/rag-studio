@@ -3,6 +3,7 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Events } from '@wailsio/runtime'
 import BaseButton from '../components/BaseButton.vue'
+import EvaluationPanel from './EvaluationPanel.vue'
 import TabBar from '../components/TabBar.vue'
 import FormField from '../components/FormField.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -18,9 +19,15 @@ import {
   deleteDocument,
   trainProject,
   getTrainingStatus,
+  reindexDocument,
+  cancelTraining,
+  exportProject,
+  listPromptTemplates,
+  type PromptTemplate,
   type TrainingProgress
 } from '../services/projects'
-import { isWailsRuntime } from '../services/settings'
+import { isWailsRuntime, waitForWailsRuntime } from '../services/settings'
+import { isGuest } from '../services/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,7 +38,8 @@ const project = computed(() => mockStore.projects.find((p) => p.id === projectId
 const activeTab = ref('knowledge')
 const tabs = [
   { id: 'knowledge', label: 'Knowledge Base' },
-  { id: 'persona', label: 'Persona' }
+  { id: 'persona', label: 'Persona' },
+  { id: 'evaluation', label: 'Evaluation' }
 ]
 
 let unsubscribeProgress: (() => void) | undefined
@@ -41,8 +49,14 @@ let isPollingStatus = false
 
 onMounted(async () => {
   await loadProject()
+  try {
+    promptTemplates.value = await listPromptTemplates()
+  } catch {
+    promptTemplates.value = []
+  }
 
-  if (isWailsRuntime) {
+  const runtimeReady = await waitForWailsRuntime()
+  if (runtimeReady && isWailsRuntime()) {
     unsubscribeProgress = Events.On('training:progress', (event) => {
       applyTrainingProgress(event.data as TrainingProgress)
     })
@@ -129,6 +143,18 @@ const hasUntrainedFiles = computed(() => {
   )
 })
 
+const hasStaleChunks = computed(() =>
+  project.value?.files.some((f) => f.status === 'Chunked') || false
+)
+
+const isReadOnly = computed(() => isGuest.value)
+const promptTemplates = ref<PromptTemplate[]>([])
+
+function applyPromptTemplate(name: string) {
+  const template = promptTemplates.value.find((item) => item.name === name)
+  if (template) personaForm.value.instructions = template.instructions
+}
+
 function applyTrainingProgress(progress: TrainingProgress) {
   const proj = mockStore.projects.find((item) => item.id === progress.projectId)
   if (!proj) return
@@ -164,19 +190,37 @@ function refreshTrainingStatus() {
   }
 }
 
-async function rerunTraining() {
-  if (confirm('This will reset the training status and start chunking anew. Continue?')) {
-    trainingErrors.value = []
-    try {
-      // trainProject internally calls ResetStaleProcessing, so it can rerun safely.
-      // Await the result so loading state & errors are properly caught.
-      const progress = await trainProject(projectId.value)
-      if (progress) {
-        applyTrainingProgress(progress)
-      }
-    } catch (err: any) {
-      trainingErrors.value = [err?.message || 'Failed to rerun training.']
-    }
+async function handleExportProject() {
+  try {
+    const payload = await exportProject(projectId.value)
+    if (!payload) return
+    const blob = new Blob([payload], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `${project.value?.name || 'project'}.json`
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch (err: any) {
+    trainingErrors.value = [err?.message || 'Failed to export project.']
+  }
+}
+
+async function handleReindexDocument(fileId: string) {
+  if (isReadOnly.value) return
+  try {
+    await reindexDocument(projectId.value, fileId)
+    await loadProject()
+  } catch (err: any) {
+    trainingErrors.value = [err?.message || 'Failed to re-index document.']
+  }
+}
+
+async function handleCancelTraining() {
+  try {
+    await cancelTraining(projectId.value)
+  } catch (err: any) {
+    trainingErrors.value = [err?.message || 'Failed to stop training.']
   }
 }
 
@@ -305,8 +349,15 @@ async function handleSavePersona() {
           <h1 class="project-name">{{ project.name }}</h1>
           <p class="project-description">{{ project.description || 'No description provided.' }}</p>
         </div>
+        <BaseButton v-if="!isReadOnly" variant="outline" size="sm" type="button" @click="handleExportProject">
+          Export project
+        </BaseButton>
       </div>
     </header>
+
+    <div v-if="isReadOnly" class="readonly-banner">
+      Demo project — read only. Register or sign in to manage your own knowledge base.
+    </div>
 
     <!-- Main Tabs & Body -->
     <div class="detail-content">
@@ -368,6 +419,9 @@ async function handleSavePersona() {
             <div class="progress-bar" :style="{ width: `${trainingProgress}%` }"></div>
           </div>
           <div class="training-step-text">{{ trainingStep }}</div>
+          <BaseButton variant="secondary" size="sm" type="button" class="training-cancel" @click="handleCancelTraining">
+            Stop training
+          </BaseButton>
         </div>
 
         <!-- Training failures -->
@@ -383,13 +437,18 @@ async function handleSavePersona() {
         <!-- Files Header & Train Action -->
         <div class="files-header-row">
           <div class="files-header-left">
-            <h3 class="files-title">Uploaded documents</h3>
-            <span class="files-count-badge">{{ project.files.length }} files</span>
-            <span v-if="totalChunks > 0" class="chunks-total-badge">{{ totalChunks }} indexed chunks</span>
-          </div>
-          
-          <div class="files-header-actions">
+            <div class="files-heading-title">
+              <h3 class="files-title">Uploaded documents</h3>
+              <span class="files-count-badge">{{ project.files.length }} files</span>
+              <span v-if="totalChunks > 0" class="chunks-total-badge">{{ totalChunks }} indexed chunks</span>
+            </div>
             <span v-if="lastIndexedAt" class="indexed-at-hint">Last trained: {{ lastIndexedAt }}</span>
+          </div>
+
+          <div class="files-header-actions">
+            <p v-if="hasStaleChunks" class="stale-hint">
+              Vectors are not stored yet. Re-index to enable chat.
+            </p>
             <BaseButton
               v-if="project.files.length > 0"
               variant="primary"
@@ -400,20 +459,7 @@ async function handleSavePersona() {
               <svg v-if="!isTraining" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
               </svg>
-              <span>{{ isTraining ? 'Training in progress...' : (hasUntrainedFiles ? 'Train knowledge base' : 'Re-index knowledge base') }}</span>
-            </BaseButton>
-            <BaseButton
-              v-if="!isTraining && project.files.some(f => f.status === 'Chunked')"
-              variant="secondary"
-              class="train-btn"
-              @click="rerunTraining"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path>
-                <path d="M9 11h6"></path>
-                <path d="M9 7h6v2H9V7z"></path>
-              </svg>
-              <span>Rerun Training</span>
+              <span>{{ isTraining ? 'Training in progress...' : (hasUntrainedFiles || hasStaleChunks ? 'Re-index knowledge base' : 'Train knowledge base') }}</span>
             </BaseButton>
           </div>
         </div>
@@ -423,9 +469,9 @@ async function handleSavePersona() {
           <table class="files-table">
             <colgroup>
               <col class="col-name" />
-              <col class="col-type" />
+              <col class="col-type col-optional" />
               <col class="col-size" />
-              <col class="col-date" />
+              <col class="col-date col-optional" />
               <col class="col-chunks" />
               <col class="col-status" />
               <col class="col-actions" />
@@ -433,9 +479,9 @@ async function handleSavePersona() {
             <thead>
               <tr>
                 <th scope="col" class="th-name">File name</th>
-                <th scope="col">Type</th>
+                <th scope="col" class="col-optional">Type</th>
                 <th scope="col">Size</th>
-                <th scope="col">Added date</th>
+                <th scope="col" class="col-optional">Added date</th>
                 <th scope="col">Chunks</th>
                 <th scope="col">Status</th>
                 <th scope="col" class="th-actions"><span class="sr-only">Actions</span></th>
@@ -455,13 +501,13 @@ async function handleSavePersona() {
                     <span class="file-name-text" :title="file.name">{{ file.name }}</span>
                   </div>
                 </td>
-                <td>
+                <td class="col-optional">
                   <span class="file-type-tag">{{ file.type }}</span>
                 </td>
                 <td>
                   <span class="file-size-text font-mono">{{ file.size }}</span>
                 </td>
-                <td>
+                <td class="col-optional">
                   <time class="file-date font-mono">{{ file.addedDate }}</time>
                 </td>
                 <td>
@@ -473,6 +519,17 @@ async function handleSavePersona() {
                 </td>
                 <td class="td-actions">
                   <button
+                    v-if="!isReadOnly"
+                    type="button"
+                    class="file-reindex-btn"
+                    title="Re-index this document"
+                    :disabled="isTraining"
+                    @click="handleReindexDocument(file.id)"
+                  >
+                    ↻
+                  </button>
+                  <button
+                    v-if="!isReadOnly"
                     type="button"
                     class="file-delete-btn"
                     title="Remove file"
@@ -526,6 +583,20 @@ async function handleSavePersona() {
           </FormField>
 
           <FormField
+            v-if="promptTemplates.length > 0"
+            label="Instruction template"
+            id="persona-template"
+            hint="Start from a saved template, then edit as needed."
+          >
+            <select id="persona-template" @change="applyPromptTemplate(($event.target as HTMLSelectElement).value)">
+              <option value="">Choose a template…</option>
+              <option v-for="template in promptTemplates" :key="template.id" :value="template.name">
+                {{ template.name }}
+              </option>
+            </select>
+          </FormField>
+
+          <FormField
             label="Instructions"
             id="persona-instructions"
             hint="System prompt guiding formatting, boundaries, and tone."
@@ -550,6 +621,7 @@ async function handleSavePersona() {
 
             <FormField label="Answer language" id="persona-lang">
               <select id="persona-lang" v-model="personaForm.answerLanguage">
+                <option value="auto">Auto (match question)</option>
                 <option value="English">English</option>
                 <option value="Indonesian">Indonesian</option>
                 <option value="Spanish">Spanish</option>
@@ -581,6 +653,10 @@ async function handleSavePersona() {
             <span v-if="saveMessage" class="save-success-msg">{{ saveMessage }}</span>
           </div>
         </form>
+      </section>
+
+      <section v-else-if="activeTab === 'evaluation'" class="tab-panel">
+        <EvaluationPanel :project-id="projectId" />
       </section>
     </div>
   </div>
@@ -647,6 +723,14 @@ async function handleSavePersona() {
   font-size: var(--font-size-base);
   color: var(--color-text-muted);
   margin-top: 2px;
+}
+
+.readonly-banner {
+  padding: var(--space-12) var(--space-32);
+  background-color: var(--color-accent-subtle);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: var(--font-size-sm);
 }
 
 .detail-content {
@@ -819,6 +903,27 @@ async function handleSavePersona() {
   margin-bottom: var(--space-4);
 }
 
+.training-cancel {
+  align-self: flex-start;
+  margin-top: var(--space-8);
+}
+
+.file-reindex-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background-color: var(--color-surface-subtle);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  font-size: var(--font-size-md);
+}
+
+.file-reindex-btn:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+
 .training-errors-list {
   margin: 0;
   padding-left: var(--space-20);
@@ -829,14 +934,24 @@ async function handleSavePersona() {
 /* Files Header Row */
 .files-header-row {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: space-between;
+  gap: var(--space-16);
   margin-top: var(--space-24);
   margin-bottom: var(--space-12);
 }
 
 .files-header-left {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.files-heading-title {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--space-12);
 }
@@ -845,6 +960,7 @@ async function handleSavePersona() {
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
   color: var(--color-text);
+  margin: 0;
 }
 
 .files-count-badge,
@@ -865,8 +981,16 @@ async function handleSavePersona() {
 
 .files-header-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--space-16);
+  justify-content: flex-end;
+  gap: var(--space-12);
+}
+
+.stale-hint {
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
+  max-width: 260px;
 }
 
 .indexed-at-hint {
@@ -887,14 +1011,35 @@ async function handleSavePersona() {
   background-color: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
-  overflow: hidden;
+  overflow-x: auto;
 }
 
 .files-table {
   width: 100%;
+  min-width: 620px;
   table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
+}
+
+@media (max-width: 700px) {
+  .files-table .col-optional {
+    display: none;
+  }
+
+  .files-table {
+    min-width: 480px;
+  }
+}
+
+@media (max-width: 600px) {
+  .detail-content {
+    padding: var(--space-16);
+  }
+
+  .files-header-actions {
+    justify-content: flex-start;
+  }
 }
 
 .col-name    { width: auto; }

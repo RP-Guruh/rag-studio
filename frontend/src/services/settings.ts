@@ -11,15 +11,74 @@ import { mockStore } from '../mock/data'
 
 declare global {
   interface Window {
-    _wails?: { environment?: unknown }
+    _wails?: { environment?: unknown; invoke?: unknown; flags?: unknown }
+    webkit?: { messageHandlers?: Record<string, unknown> }
+    chrome?: { webview?: unknown }
   }
 }
 
 export type { ChatModel, Database, DoclingConnection, EmbeddingModel, Settings, TestResult }
 
-/** True when the page runs inside the Wails webview rather than a plain browser. */
-export const isWailsRuntime =
-  typeof window !== 'undefined' && Boolean(window._wails?.environment)
+/** True when the Wails runtime has been injected into the page. */
+export function isWailsRuntime(): boolean {
+  if (typeof window === 'undefined') return false
+  const wails = window._wails
+  return Boolean(
+    wails?.invoke ||
+    wails?.environment ||
+    window.chrome?.webview ||
+    window.webkit?.messageHandlers?.external
+  )
+}
+
+let wailsRuntimeConfirmed = false
+let wailsRuntimeSettled = false
+
+if (typeof window !== 'undefined') {
+  // The event fires when Wails injects its runtime, possibly after this module
+  // was evaluated. Keep listening so a late injection is still recognised.
+  window.addEventListener('wails:runtime-config-ready', () => {
+    if (isWailsRuntime()) wailsRuntimeConfirmed = true
+  })
+}
+
+/**
+ * Wails injects its runtime on WindowLoadFinished, which can be later than
+ * module evaluation. Wait briefly instead of silently falling back to mock
+ * data before the bindings exist.
+ */
+export async function waitForWailsRuntime(timeoutMs = 2000): Promise<boolean> {
+  if (wailsRuntimeConfirmed || isWailsRuntime()) {
+    wailsRuntimeConfirmed = true
+    return true
+  }
+  if (typeof window === 'undefined') return false
+  if (wailsRuntimeSettled) return false
+
+  await new Promise<void>((resolve) => {
+    let done = false
+    const finish = () => {
+      if (done) return
+      done = true
+      window.removeEventListener('wails:runtime-config-ready', finish)
+      window.clearInterval(poll)
+      window.clearTimeout(timeout)
+      resolve()
+    }
+    const poll = window.setInterval(() => {
+      if (isWailsRuntime()) finish()
+    }, 50)
+    const timeout = window.setTimeout(finish, timeoutMs)
+    window.addEventListener('wails:runtime-config-ready', finish)
+  })
+
+  wailsRuntimeSettled = true
+  if (isWailsRuntime()) {
+    wailsRuntimeConfirmed = true
+    return true
+  }
+  return false
+}
 
 export const chatProviders = [
   { value: 'openai-compatible', label: 'OpenAI-compatible' },
@@ -95,6 +154,16 @@ export const defaultSettings: Settings = {
   }
 }
 
+export async function backupSettings(): Promise<string> {
+  if (!(await waitForWailsRuntime())) return ''
+  return SettingsService.BackupSettings()
+}
+
+export async function restoreSettings(payload: string): Promise<void> {
+  if (!(await waitForWailsRuntime())) return
+  await SettingsService.RestoreSettings(payload)
+}
+
 export function errorText(error: unknown): string {
   if (error instanceof Error) return error.message
   if (typeof error === 'string') return error
@@ -102,14 +171,14 @@ export function errorText(error: unknown): string {
 }
 
 export async function loadSettings(): Promise<Settings> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     return clone(mockStore.settings)
   }
   return SettingsService.GetSettings()
 }
 
 export async function saveChatModel(input: ChatModel): Promise<ChatModel> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const saved = stripSecret(input)
     mockStore.settings.chatModel = {
       ...applySecretState(saved, input.apiKey, input.clearApiKey, 'apiKeySet', 'apiKeyHint'),
@@ -121,7 +190,7 @@ export async function saveChatModel(input: ChatModel): Promise<ChatModel> {
 }
 
 export async function saveEmbeddingModel(input: EmbeddingModel): Promise<EmbeddingModel> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const saved = stripSecret(input)
     mockStore.settings.embeddingModel = {
       ...applySecretState(saved, input.apiKey, input.clearApiKey, 'apiKeySet', 'apiKeyHint'),
@@ -133,7 +202,7 @@ export async function saveEmbeddingModel(input: EmbeddingModel): Promise<Embeddi
 }
 
 export async function saveDatabase(input: Database): Promise<{database: Database, migrated: boolean}> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const saved = stripSecret(input)
     mockStore.settings.database = {
       ...applySecretState(saved, input.password, input.clearPassword, 'passwordSet', 'passwordHint'),
@@ -146,7 +215,7 @@ export async function saveDatabase(input: Database): Promise<{database: Database
 }
 
 export async function saveDocling(input: DoclingConnection): Promise<DoclingConnection> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const saved = stripSecret(input)
     mockStore.settings.docling = {
       ...applySecretState(saved, input.apiKey, input.clearApiKey, 'apiKeySet', 'apiKeyHint'),
@@ -158,14 +227,14 @@ export async function saveDocling(input: DoclingConnection): Promise<DoclingConn
 }
 
 export async function testChatModel(input: ChatModel): Promise<TestResult> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     return mockTest(`Chat provider ${input.provider} (${input.modelName})`)
   }
   return SettingsService.TestChatModel(input)
 }
 
 export async function testEmbeddingModel(input: EmbeddingModel): Promise<TestResult> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     return mockTest(
       `Embedding provider ${input.provider} (${input.vectorDimension} dimensions)`
     )
@@ -174,14 +243,14 @@ export async function testEmbeddingModel(input: EmbeddingModel): Promise<TestRes
 }
 
 export async function testDatabase(input: Database): Promise<TestResult> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     return mockTest(`PostgreSQL at ${input.host}:${input.port}`)
   }
   return SettingsService.TestDatabase(input)
 }
 
 export async function testDocling(input: DoclingConnection): Promise<TestResult> {
-  if (!isWailsRuntime) {
+  if (!(await waitForWailsRuntime())) {
     const subject = input.mode === 'local'
       ? 'Local Docling engine'
       : `Docling at ${input.baseUrl}`

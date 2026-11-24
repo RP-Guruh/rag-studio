@@ -1,49 +1,82 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { mockStore, signOut } from '../mock/data'
+import { currentUser, isGuest, logout } from '../services/auth'
 import { useTheme } from '../utils/theme'
+import { locale, setLocale, t } from '../i18n'
 import AppLogo from '../components/AppLogo.vue'
 
 const router = useRouter()
 const route = useRoute()
 const { isDark, toggleTheme } = useTheme()
 
-const currentUser = computed(() => mockStore.currentUser?.name || 'Guest')
+const displayName = computed(() => {
+  const user = currentUser.value
+  if (!user) return 'Guest'
+  return user.role === 'guest' ? 'Guest' : user.email.split('@')[0]
+})
+const roleLabel = computed(() => {
+  const role = currentUser.value?.role
+  return role === 'admin' ? 'Administrator' : role === 'user' ? 'Member' : 'Trial'
+})
+const isSidebarOpen = ref(false)
 
-const navItems = [
+function closeSidebar() {
+  isSidebarOpen.value = false
+}
+
+const navItems = computed(() => [
   {
-    name: 'Dashboard',
+    name: t('nav.dashboard'),
     path: '/dashboard',
     icon: 'M3 3h7v9H3V3zm11 0h7v5h-7V3zm0 9h7v9h-7v-9zM3 16h7v5H3v-5z'
   },
   {
-    name: 'Playground',
+    name: t('nav.playground'),
     path: '/playground',
     icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'
   },
   {
-    name: 'Settings',
+    name: t('nav.settings'),
     path: '/settings',
     icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 7a10 10 0 1 1 0-20 10 10 0 0 1 0 20z'
   }
-]
+])
 
-function handleSignOut() {
-  signOut()
+async function handleSignOut() {
+  await logout()
   router.push('/login')
 }
 </script>
 
 <template>
   <div class="shell">
+    <button
+      type="button"
+      class="mobile-nav-toggle"
+      aria-label="Open navigation"
+      @click="isSidebarOpen = !isSidebarOpen"
+    >
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="3" y1="6" x2="21" y2="6" />
+        <line x1="3" y1="12" x2="21" y2="12" />
+        <line x1="3" y1="18" x2="21" y2="18" />
+      </svg>
+    </button>
+    <div
+      v-if="isSidebarOpen"
+      class="sidebar-backdrop"
+      @click="closeSidebar"
+    />
+
     <!-- Left Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" :class="{ 'sidebar--open': isSidebarOpen }">
       <div class="sidebar-header">
         <div class="brand">
           <AppLogo :size="24" />
           <span class="brand-title">RAG Studio</span>
         </div>
+        <span v-if="isGuest" class="guest-badge">Demo</span>
       </div>
 
       <nav class="sidebar-nav">
@@ -53,6 +86,7 @@ function handleSignOut() {
           :to="item.path"
           class="nav-link"
           :class="{ 'nav-link--active': route.path.startsWith(item.path) }"
+          @click="closeSidebar"
         >
           <svg class="nav-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path :d="item.icon" />
@@ -62,6 +96,13 @@ function handleSignOut() {
       </nav>
 
       <div class="sidebar-footer">
+        <button
+          type="button"
+          class="theme-toggle-btn locale-toggle-btn"
+          @click="setLocale(locale === 'en' ? 'id' : 'en')"
+        >
+          <span>{{ locale === 'en' ? 'Bahasa Indonesia' : 'English' }}</span>
+        </button>
         <button
           type="button"
           class="theme-toggle-btn"
@@ -89,11 +130,11 @@ function handleSignOut() {
         <div class="user-row">
           <div class="user-info">
             <div class="user-avatar" aria-hidden="true">
-              {{ currentUser.charAt(0).toUpperCase() }}
+              {{ displayName.charAt(0).toUpperCase() }}
             </div>
             <div class="user-details">
-              <span class="user-name">{{ currentUser }}</span>
-              <span class="user-role">Local user</span>
+              <span class="user-name">{{ displayName }}</span>
+              <span class="user-role">{{ roleLabel }}</span>
             </div>
           </div>
           <button
@@ -306,5 +347,119 @@ function handleSignOut() {
   background-image:
     radial-gradient(ellipse at 80% 0%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
     radial-gradient(ellipse at 10% 100%, rgba(99, 102, 241, 0.03) 0%, transparent 40%);
+}
+
+.guest-badge {
+  margin-left: var(--space-8);
+  padding: 2px var(--space-8);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mobile-nav-toggle,
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .sidebar {
+    width: 64px;
+    min-width: 64px;
+  }
+
+  .sidebar-header,
+  .sidebar-footer {
+    padding-left: var(--space-8);
+    padding-right: var(--space-8);
+  }
+
+  .brand {
+    justify-content: center;
+  }
+
+  .brand-title,
+  .nav-link span,
+  .theme-toggle-btn span,
+  .user-details,
+  .signout-btn,
+  .locale-toggle-btn {
+    display: none;
+  }
+
+  .nav-link,
+  .theme-toggle-btn {
+    justify-content: center;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  .user-row {
+    justify-content: center;
+  }
+}
+
+@media (max-width: 600px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 60;
+    width: 220px;
+    min-width: 220px;
+    transform: translateX(-100%);
+    transition: transform var(--transition-fast);
+    box-shadow: var(--shadow-floating);
+  }
+
+  .sidebar--open {
+    transform: translateX(0);
+  }
+
+  .brand-title,
+  .nav-link span,
+  .theme-toggle-btn span,
+  .user-details {
+    display: block;
+  }
+
+  .nav-link,
+  .theme-toggle-btn {
+    justify-content: flex-start;
+    padding-left: var(--space-12);
+    padding-right: var(--space-12);
+  }
+
+  .brand {
+    justify-content: flex-start;
+  }
+
+  .mobile-nav-toggle {
+    position: sticky;
+    top: var(--space-8);
+    z-index: 55;
+    align-self: flex-start;
+    margin: var(--space-8);
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface);
+    color: var(--color-text);
+  }
+
+  .sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: block;
+    background-color: rgba(15, 23, 42, 0.45);
+  }
 }
 </style>

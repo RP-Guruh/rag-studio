@@ -1,18 +1,49 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import BaseButton from '../components/BaseButton.vue'
 import FormField from '../components/FormField.vue'
 import AppLogo from '../components/AppLogo.vue'
-import { signInAsGuest } from '../mock/data'
+import { hasUsers, guestAccess, register, login, loginGuest } from '../services/auth'
+import { t } from '../i18n'
 
 const router = useRouter()
 const email = ref('')
 const password = ref('')
+const error = ref('')
+const busy = ref(false)
 
-function handleContinueAsGuest() {
-  signInAsGuest()
-  router.push('/dashboard')
+const isRegister = computed(() => !hasUsers.value)
+
+async function submit() {
+  if (!email.value.trim() || !password.value) return
+  error.value = ''
+  busy.value = true
+  try {
+    if (isRegister.value) {
+      await register(email.value.trim(), password.value)
+    } else {
+      await login(email.value.trim(), password.value)
+    }
+    router.push('/dashboard')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    busy.value = false
+  }
+}
+
+async function handleContinueAsGuest() {
+  error.value = ''
+  busy.value = true
+  try {
+    await loginGuest()
+    router.push('/dashboard')
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : String(err)
+  } finally {
+    busy.value = false
+  }
 }
 </script>
 
@@ -26,15 +57,21 @@ function handleContinueAsGuest() {
         <div class="login-logo-wrap">
           <AppLogo :size="44" :animated="true" />
         </div>
-        <h1 class="login-title">Sign in to RAG Studio</h1>
-        <p class="login-subtitle">Vector Knowledge & Neural Retrieval</p>
+        <h1 class="login-title">{{ isRegister ? t('auth.register') : t('auth.signIn') }} — RAG Studio</h1>
+        <p class="login-subtitle">
+          {{ isRegister ? 'The first account becomes the administrator.' : 'Vector Knowledge & Neural Retrieval' }}
+        </p>
       </div>
 
-      <form class="login-form" @submit.prevent>
+      <div v-if="error" class="login-error">{{ error }}</div>
+
+      <form class="login-form" @submit.prevent="submit">
         <BaseButton
+          v-if="guestAccess"
           variant="primary"
           type="button"
           class="guest-login-btn"
+          :disabled="busy"
           @click="handleContinueAsGuest"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -42,16 +79,16 @@ function handleContinueAsGuest() {
             <polyline points="10 17 15 12 10 7"></polyline>
             <line x1="15" y1="12" x2="3" y2="12"></line>
           </svg>
-          <span>Continue as guest</span>
+          <span>{{ t('auth.guest') }}</span>
         </BaseButton>
 
         <div class="divider-row">
           <span class="divider-line" />
-          <span class="divider-text">or sign in with credentials</span>
+          <span class="divider-text">{{ isRegister ? 'or create the admin account' : 'or sign in with credentials' }}</span>
           <span class="divider-line" />
         </div>
 
-        <FormField label="Email address" id="login-email">
+        <FormField :label="t('auth.email')" id="login-email">
           <input
             id="login-email"
             v-model="email"
@@ -61,7 +98,7 @@ function handleContinueAsGuest() {
           />
         </FormField>
 
-        <FormField label="Password" id="login-password">
+        <FormField :label="t('auth.password')" id="login-password">
           <input
             id="login-password"
             v-model="password"
@@ -72,10 +109,9 @@ function handleContinueAsGuest() {
         </FormField>
 
         <div class="action-block">
-          <BaseButton variant="outline" type="button" disabled>
-            Sign in
+          <BaseButton variant="primary" type="submit" :disabled="busy || !email.trim() || !password">
+            {{ busy ? '…' : (isRegister ? t('auth.register') : t('auth.signIn')) }}
           </BaseButton>
-          <span class="status-note">Single-tenant local mode &bull; Cloud sync coming soon</span>
         </div>
       </form>
     </div>
@@ -107,6 +143,14 @@ function handleContinueAsGuest() {
   background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
   filter: blur(80px);
   pointer-events: none;
+}
+
+.login-error {
+  padding: var(--space-8) var(--space-12);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius-sm);
+  color: var(--color-danger);
+  font-size: var(--font-size-sm);
 }
 
 .login-card {

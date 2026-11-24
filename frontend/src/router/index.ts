@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
-import { mockStore } from '../mock/data'
+import { isAuthenticated, isAdmin } from '../services/auth'
 
 import LoginPage from '../pages/LoginPage.vue'
 import AppShell from '../layouts/AppShell.vue'
@@ -7,6 +7,8 @@ import DashboardPage from '../pages/DashboardPage.vue'
 import ProjectDetailPage from '../pages/ProjectDetailPage.vue'
 import PlaygroundPage from '../pages/PlaygroundPage.vue'
 import SettingsLayout from '../pages/settings/SettingsLayout.vue'
+import UsersPage from '../pages/settings/UsersPage.vue'
+import HealthPage from '../pages/settings/HealthPage.vue'
 import ChatModelPage from '../pages/settings/ChatModelPage.vue'
 import EmbeddingModelPage from '../pages/settings/EmbeddingModelPage.vue'
 import DatabasePage from '../pages/settings/DatabasePage.vue'
@@ -47,7 +49,7 @@ const routes: RouteRecordRaw[] = [
         children: [
           {
             path: '',
-            redirect: '/settings/chat'
+            redirect: '/settings/health'
           },
           {
             path: 'chat',
@@ -68,6 +70,16 @@ const routes: RouteRecordRaw[] = [
             path: 'docling',
             name: 'DoclingSettings',
             component: DoclingPage
+          },
+          {
+            path: 'users',
+            name: 'UsersSettings',
+            component: UsersPage
+          },
+          {
+            path: 'health',
+            name: 'HealthSettings',
+            component: HealthPage
           }
         ]
       }
@@ -86,8 +98,10 @@ export const router = createRouter({
 
 // Navigation guard to ensure login screen is shown first unless signed in
 router.beforeEach((to, _from, next) => {
-  if (to.path !== '/login' && !mockStore.currentUser) {
+  if (to.path !== '/login' && !isAuthenticated.value) {
     next('/login')
+  } else if (to.path === '/settings/users' && !isAdmin.value) {
+    next('/settings/health')
   } else {
     next()
   }
