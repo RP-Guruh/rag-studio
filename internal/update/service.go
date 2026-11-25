@@ -27,6 +27,7 @@ var Version = "0.1.1"
 const (
 	repoURL      = "https://github.com/RP-Guruh/rag-studio"
 	releasesAPI  = "https://api.github.com/repos/RP-Guruh/rag-studio/releases/latest"
+	releasesList = "https://api.github.com/repos/RP-Guruh/rag-studio/releases?per_page=10"
 	downloadAPI  = "https://api.github.com/repos/RP-Guruh/rag-studio/releases/assets/"
 	requestLimit = 30 * time.Second
 )
@@ -44,6 +45,7 @@ type Info struct {
 
 type release struct {
 	TagName string `json:"tag_name"`
+	Draft   bool   `json:"draft"`
 	Body    string `json:"body"`
 	HTMLURL string `json:"html_url"`
 	Assets  []struct {
@@ -62,25 +64,64 @@ func NewService() *Service {
 	return &Service{client: &http.Client{Timeout: requestLimit}}
 }
 
-func (s *Service) latest(ctx context.Context) (*release, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, releasesAPI, nil)
+func (s *Service) getRelease(ctx context.Context, url string) (*release, int, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "RAG-Studio/"+normalizeVersion(Version))
 	response, err := s.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not reach GitHub: %w", err)
+		return nil, 0, fmt.Errorf("could not reach GitHub: %w", err)
 	}
 	defer response.Body.Close()
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return nil, fmt.Errorf("GitHub returned HTTP %d", response.StatusCode)
+		return nil, response.StatusCode, fmt.Errorf("GitHub returned HTTP %d for %s", response.StatusCode, url)
 	}
 	var result release
 	if err := json.NewDecoder(response.Body).Decode(&result); err != nil {
-		return nil, fmt.Errorf("parse release response: %w", err)
+		return nil, response.StatusCode, fmt.Errorf("parse release response: %w", err)
 	}
-	return &result, nil
+	return &result, response.StatusCode, nil
+}
+
+func (s *Service) latest(ctx context.Context) (*release, error) {
+	result, status, err := s.getRelease(ctx, releasesAPI)
+	if err == nil {
+		return result, nil
+	}
+	if status != http.StatusNotFound {
+		return nil, err
+	}
+
+	// Some repositories have no /releases/latest result. Fall back to the
+	// newest published release from the list endpoint.
+	req, requestErr := http.NewRequestWithContext(ctx, http.MethodGet, releasesList, nil)
+	if requestErr != nil {
+		return nil, requestErr
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", "RAG-Studio/"+normalizeVersion(Version))
+	response, requestErr := s.client.Do(req)
+	if requestErr != nil {
+		return nil, fmt.Errorf("could not reach GitHub: %w", requestErr)
+	}
+	defer response.Body.Close()
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		return nil, fmt.Errorf("GitHub returned HTTP %d for releases list", response.StatusCode)
+	}
+	var list []release
+	if err := json.NewDecoder(response.Body).Decode(&list); err != nil {
+		return nil, fmt.Errorf("parse releases list: %w", err)
+	}
+	for _, item := range list {
+		if !item.Draft && normalizeVersion(item.TagName) != "" {
+			found := item
+			return &found, nil
+		}
+	}
+	return nil, errors.New("no published release found on GitHub")
 }
 
 func normalizeVersion(value string) string {
@@ -159,6 +200,44 @@ func (s *Service) CheckForUpdate() (*Info, error) {
 	return info, nil
 }
 
+// openDownload tries the GitHub API asset endpoint first and falls back to the
+// browser download URL when the API rejects the request.
+func (s *Service) openDownload(ctx context.Context, apiURL, browserURL string) (*http.Response, error) {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("Accept", "application/octet-stream")
+	request.Header.Set("User-Agent", "RAG-Studio/"+normalizeVersion(Version))
+	response, err := s.client.Do(request)
+	if err == nil && response.StatusCode >= 200 && response.StatusCode < 300 {
+		return response, nil
+	}
+	if response != nil {
+		_ = response.Body.Close()
+	}
+	if browserURL == "" {
+		if err != nil {
+			return nil, fmt.Errorf("download failed: %w", err)
+		}
+		return nil, fmt.Errorf("download returned HTTP %d", response.StatusCode)
+	}
+	request, err = http.NewRequestWithContext(ctx, http.MethodGet, browserURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	request.Header.Set("User-Agent", "RAG-Studio/"+normalizeVersion(Version))
+	response, err = s.client.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("download failed: %w", err)
+	}
+	if response.StatusCode < 200 || response.StatusCode >= 300 {
+		_ = response.Body.Close()
+		return nil, fmt.Errorf("download returned HTTP %d", response.StatusCode)
+	}
+	return response, nil
+}
+
 // DownloadLatestInstaller downloads the asset matching this OS/architecture
 // into the user's Downloads directory and returns the saved path.
 func (s *Service) DownloadLatestInstaller() (string, error) {
@@ -168,25 +247,16 @@ func (s *Service) DownloadLatestInstaller() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	assetID, name, _, ok := preferredAsset(latest.Assets)
+	assetID, name, browserURL, ok := preferredAsset(latest.Assets)
 	if !ok {
 		return "", fmt.Errorf("no installer found for %s/%s in this release", runtime.GOOS, runtime.GOARCH)
 	}
 
-	url := fmt.Sprintf("%s%d", downloadAPI, assetID)
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	response, err := s.openDownload(ctx, fmt.Sprintf("%s%d", downloadAPI, assetID), browserURL)
 	if err != nil {
 		return "", err
 	}
-	req.Header.Set("Accept", "application/octet-stream")
-	response, err := s.client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("download failed: %w", err)
-	}
 	defer response.Body.Close()
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", fmt.Errorf("download returned HTTP %d", response.StatusCode)
-	}
 
 	dir, err := os.UserHomeDir()
 	if err != nil {
