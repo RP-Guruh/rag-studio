@@ -34,6 +34,8 @@ func TestSystemPromptUsesProjectAndPersona(t *testing.T) {
 		"Always cite clause numbers.",
 		"formal tone",
 		"Answer in Indonesian.",
+		"OUTPUT FORMAT",
+		"Separate paragraphs with a blank line",
 		"Use only the knowledge context",
 		"does not contain the answer",
 	}

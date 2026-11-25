@@ -21,7 +21,6 @@ import {
   getTrainingStatus,
   reindexDocument,
   cancelTraining,
-  exportProject,
   listPromptTemplates,
   type PromptTemplate,
   type TrainingProgress
@@ -190,22 +189,6 @@ function refreshTrainingStatus() {
   }
 }
 
-async function handleExportProject() {
-  try {
-    const payload = await exportProject(projectId.value)
-    if (!payload) return
-    const blob = new Blob([payload], { type: 'application/json' })
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `${project.value?.name || 'project'}.json`
-    link.click()
-    URL.revokeObjectURL(url)
-  } catch (err: any) {
-    trainingErrors.value = [err?.message || 'Failed to export project.']
-  }
-}
-
 async function handleReindexDocument(fileId: string) {
   if (isReadOnly.value) return
   try {
@@ -352,9 +335,6 @@ async function handleSavePersona() {
           <h1 class="project-name">{{ project.name }}</h1>
           <p class="project-description">{{ project.description || 'No description provided.' }}</p>
         </div>
-        <BaseButton v-if="!isReadOnly" variant="outline" size="sm" type="button" @click="handleExportProject">
-          Export project
-        </BaseButton>
       </div>
     </header>
 

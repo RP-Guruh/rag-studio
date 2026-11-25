@@ -4,11 +4,9 @@ import { Events } from '@wailsio/runtime'
 import {
   loadSettings,
   errorText,
-  backupSettings,
   restoreSettings,
   type Settings
 } from '../../services/settings'
-import { backupAll, restoreAll } from '../../services/projects'
 import {
   checkForUpdate,
   openReleasePage,
@@ -173,37 +171,13 @@ async function handleInstallUpdate() {
   }
 }
 
-function download(data: string, filename: string, type: string) {
-  if (!data) return
-  const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0))
-  const url = URL.createObjectURL(new Blob([bytes], { type }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = filename
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-async function handleBackupAll() {
-  try {
-    download(await backupAll(), 'rag-studio-backup.json', 'application/json')
-    message.value = 'Full backup downloaded.'
-  } catch (err) {
-    error.value = errorText(err)
-  }
-}
-
-async function handleRestoreFile(event: Event, kind: 'settings' | 'database') {
+async function handleRestoreSettings(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
   try {
-    const data = await file.text()
-    if (kind === 'settings') await restoreSettings(data)
-    else await restoreAll(data)
-    message.value = kind === 'settings'
-      ? 'Settings restored. Restart the app to apply.'
-      : 'Knowledge bases restored.'
+    await restoreSettings(await file.text())
+    message.value = 'Settings restored. Restart the app to apply.'
   } catch (err) {
     error.value = errorText(err)
   } finally {
@@ -297,16 +271,11 @@ const items = [
     </section>
 
     <section class="health-card">
-      <h3 class="card-title">Backup & restore</h3>
+      <h3 class="card-title">Restore settings</h3>
       <div class="row-actions">
-        <button type="button" class="action-btn" @click="handleBackupAll">Backup all projects</button>
         <label class="action-btn">
           Restore settings (.db)
-          <input type="file" accept=".db,.sqlite" @change="handleRestoreFile($event, 'settings')" />
-        </label>
-        <label class="action-btn">
-          Restore projects (.json)
-          <input type="file" accept=".json" @change="handleRestoreFile($event, 'database')" />
+          <input type="file" accept=".db,.sqlite" @change="handleRestoreSettings" />
         </label>
       </div>
     </section>

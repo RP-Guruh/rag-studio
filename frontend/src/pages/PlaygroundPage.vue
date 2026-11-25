@@ -28,6 +28,7 @@ const isSidePanelOpen = ref(
   typeof window === 'undefined' || window.innerWidth > 1100
 )
 const isSending = ref(false)
+const loadingAssistantId = ref('')
 const sendError = ref('')
 const debugInfo = ref<ChatDebug | null>(null)
 const chatScrollContainer = ref<HTMLElement | null>(null)
@@ -146,6 +147,7 @@ async function handleSendMessage() {
     timestamp: timestamp()
   })
   const placeholder = mockStore.playground.messages[projectId]?.find((msg) => msg.id === assistantId)
+  loadingAssistantId.value = assistantId
   isSending.value = true
   await scrollToBottom()
 
@@ -172,6 +174,7 @@ async function handleSendMessage() {
     }
   } finally {
     unsubscribe()
+    loadingAssistantId.value = ''
     isSending.value = false
     await scrollToBottom()
   }
@@ -255,10 +258,18 @@ function toggleSidePanel() {
                   <span class="message-time">{{ msg.timestamp }}</span>
                 </div>
                 <div
-                  v-if="msg.role === 'assistant'"
+                  v-if="msg.role === 'assistant' && !(msg.id === loadingAssistantId && !msg.content)"
                   class="message-body markdown-body"
                   v-html="renderMarkdown(msg.content)"
                 />
+                <div
+                  v-else-if="msg.role === 'assistant'"
+                  class="thinking-state"
+                  role="status"
+                >
+                  <span class="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
+                  <span>{{ activeProject?.personaName || 'Assistant' }} sedang berpikir…</span>
+                </div>
                 <div v-else class="message-body">
                   {{ msg.content }}
                 </div>
@@ -277,9 +288,6 @@ function toggleSidePanel() {
             description="Train a project's knowledge base, then ask a question below to test its answer."
           />
 
-          <div v-if="isSending" class="sending-indicator">
-            Retrieving knowledge and generating an answer…
-          </div>
         </div>
 
         <!-- Input Bar Pinned to Bottom -->
@@ -539,6 +547,7 @@ function toggleSidePanel() {
   width: fit-content;
   max-width: min(90%, 720px);
   padding: var(--space-20);
+  min-height: 56px;
 }
 
 .message-row--assistant .message-meta {
@@ -575,12 +584,16 @@ function toggleSidePanel() {
 .markdown-body {
   white-space: normal;
   min-width: 0;
-  line-height: 1.65;
+  line-height: 1.7;
   overflow-wrap: break-word;
 }
 
+.markdown-body > :first-child {
+  margin-top: 0;
+}
+
 .markdown-body p {
-  margin: 0 0 var(--space-12);
+  margin: 0 0 var(--space-16);
 }
 
 .markdown-body p:last-child {
@@ -603,7 +616,7 @@ function toggleSidePanel() {
 }
 
 .markdown-body li + li {
-  margin-top: var(--space-12);
+  margin-top: var(--space-8);
 }
 
 .markdown-body li::marker {
@@ -682,11 +695,35 @@ function toggleSidePanel() {
   font-size: 12px;
 }
 
-.sending-indicator {
-  align-self: center;
-  padding: var(--space-8) var(--space-16);
+.thinking-state {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 24px;
   font-size: var(--font-size-sm);
   color: var(--color-text-muted);
+}
+
+.thinking-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.thinking-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--color-accent);
+  animation: thinking-pulse 1.2s infinite ease-in-out;
+}
+
+.thinking-dots i:nth-child(2) { animation-delay: 0.2s; }
+.thinking-dots i:nth-child(3) { animation-delay: 0.4s; }
+
+@keyframes thinking-pulse {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
 }
 
 .send-error {

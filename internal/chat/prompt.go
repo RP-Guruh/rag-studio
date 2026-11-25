@@ -56,6 +56,9 @@ func SystemPrompt(project projects.Project) string {
 		fmt.Fprintf(&b, "Answer in %s.\n\n", language)
 	}
 
+	b.WriteString("OUTPUT FORMAT\n")
+	b.WriteString("Reply in Markdown. Separate paragraphs with a blank line. Use short bullet points or numbered lists for multiple items. Use a short heading when it helps. Write complete sentences and do not answer with one dense paragraph.\n\n")
+
 	b.WriteString("GROUNDING RULES\n")
 	if persona.StrictKnowledge {
 		b.WriteString("Use only the knowledge context provided below. Do not add facts, opinions, or details from outside that context. ")

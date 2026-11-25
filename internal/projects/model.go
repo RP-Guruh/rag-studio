@@ -141,20 +141,6 @@ type EvalCaseResult struct {
 	NoEvidence    bool         `json:"noEvidence"`
 }
 
-// ExportedDocument carries a document's metadata and file bytes for transfer.
-type ExportedDocument struct {
-	Document      Document `json:"document"`
-	ContentBase64 string   `json:"contentBase64"`
-}
-
-// ProjectExport is the portable representation of a knowledge base.
-type ProjectExport struct {
-	Version   int                `json:"version"`
-	Project   Project            `json:"project"`
-	Documents []ExportedDocument `json:"documents"`
-	Chunks    []Chunk            `json:"chunks"`
-}
-
 // EvalReport summarizes an evaluation run.
 type EvalReport struct {
 	SetID     string           `json:"setId"`

@@ -4,8 +4,6 @@ package update
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -280,11 +278,7 @@ func (s *Service) DownloadLatestInstaller() (string, error) {
 	if err := os.MkdirAll(downloads, 0o755); err != nil {
 		return "", err
 	}
-	suffix, err := randomSuffix()
-	if err != nil {
-		return "", err
-	}
-	path := filepath.Join(downloads, name+"."+suffix+".part")
+	path, final := installerPaths(downloads, name)
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
 	if err != nil {
 		return "", err
@@ -311,19 +305,26 @@ func (s *Service) DownloadLatestInstaller() (string, error) {
 			return "", fmt.Errorf("read download: %w", readErr)
 		}
 	}
-	final := strings.TrimSuffix(path, ".part")
+	// Replace an older download before renaming: os.Rename cannot overwrite an
+	// existing target on Windows, and apt must see the real file extension.
+	if _, statErr := os.Stat(final); statErr == nil {
+		if err := os.Remove(final); err != nil {
+			return "", err
+		}
+	} else if !errors.Is(statErr, os.ErrNotExist) {
+		return "", statErr
+	}
 	if err := os.Rename(path, final); err != nil {
 		return "", err
 	}
 	return final, nil
 }
 
-func randomSuffix() (string, error) {
-	bytes := make([]byte, 4)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(bytes), nil
+// installerPaths keeps the original asset name as the final filename. A random
+// suffix must never be appended after the extension, otherwise a .deb turns
+// into an un-installable "*.deb.xxxxxxxx" file.
+func installerPaths(dir, name string) (string, string) {
+	return filepath.Join(dir, name+".part"), filepath.Join(dir, name)
 }
 
 func emitProgress(name string, written int64, total int64) {

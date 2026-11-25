@@ -7,7 +7,7 @@ import FormField from '../components/FormField.vue'
 import EmptyState from '../components/EmptyState.vue'
 import ConfirmModal from '../components/ConfirmModal.vue'
 import { mockStore, type Project } from '../mock/data'
-import { listProjects, createProject, updateProject, deleteProject, importProject } from '../services/projects'
+import { listProjects, createProject, updateProject, deleteProject } from '../services/projects'
 import { t } from '../i18n'
 import { isAdmin } from '../services/auth'
 
@@ -112,24 +112,6 @@ function navigateToProject(id: string) {
   router.push(`/projects/${id}`)
 }
 
-async function handleImportProject(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file) return
-  try {
-    const payload = await file.text()
-    const created = await importProject(payload)
-    if (created) {
-      const list = await listProjects()
-      if (list.length > 0) mockStore.projects = list
-      router.push(`/projects/${created.id}`)
-    }
-  } catch (err: any) {
-    alert(err?.message || 'Failed to import project.')
-  } finally {
-    input.value = ''
-  }
-}
 </script>
 
 <template>
@@ -142,10 +124,6 @@ async function handleImportProject(event: Event) {
       </div>
       <div class="header-actions">
         <BaseButton v-if="isAdmin" variant="primary" @click="openNewProjectDialog">New project</BaseButton>
-        <label v-if="isAdmin" class="import-project-btn">
-          Import project
-          <input type="file" accept="application/json,.json" @change="handleImportProject" />
-        </label>
       </div>
     </header>
 
@@ -373,23 +351,6 @@ async function handleImportProject(event: Event) {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-}
-
-.import-project-btn {
-  display: inline-flex;
-  align-items: center;
-  min-height: 36px;
-  padding: 0 var(--space-12);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  color: var(--color-text);
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-medium);
-  cursor: pointer;
-}
-
-.import-project-btn input {
-  display: none;
 }
 
 .page-content {

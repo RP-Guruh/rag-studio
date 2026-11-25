@@ -390,26 +390,6 @@ export async function cancelChat(projectId: string): Promise<void> {
   await ProjectService.CancelChat(projectId)
 }
 
-export async function exportProject(projectId: string): Promise<string> {
-  if (!(await waitForWailsRuntime())) return ''
-  return ProjectService.ExportProject(projectId)
-}
-
-export async function importProject(payload: string): Promise<BackendProject | null> {
-  if (!(await waitForWailsRuntime())) return null
-  return ProjectService.ImportProject(payload)
-}
-
-export async function backupAll(): Promise<string> {
-  if (!(await waitForWailsRuntime())) return ''
-  return ProjectService.BackupAll()
-}
-
-export async function restoreAll(payload: string): Promise<void> {
-  if (!(await waitForWailsRuntime())) return
-  await ProjectService.RestoreAll(payload)
-}
-
 export async function askProjectStream(projectId: string, question: string): Promise<ChatAnswer> {
   const answer = await ProjectService.AskProjectStream(projectId, question)
   if (!answer) throw new Error('The playground did not return an answer')

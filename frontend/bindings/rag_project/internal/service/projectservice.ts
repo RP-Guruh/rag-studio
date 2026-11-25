@@ -36,12 +36,6 @@ export function AskProjectStream(projectID: string, question: string): $Cancella
     return $Call.ByID(185840115, projectID, question);
 }
 
-/**
- * BackupAll exports every project and its knowledge base as one JSON payload.
- */
-export function BackupAll(): $CancellablePromise<string> {
-    return $Call.ByID(465741442);
-}
 
 /**
  * CancelChat stops an in-flight streaming answer for a project.
@@ -79,13 +73,6 @@ export function DeleteProject(id: string): $CancellablePromise<void> {
     return $Call.ByID(4234103539, id);
 }
 
-/**
- * ExportProject serializes a project's metadata, documents, file bytes and
- * embedded chunks into a portable JSON payload.
- */
-export function ExportProject(projectID: string): $CancellablePromise<string> {
-    return $Call.ByID(975591480, projectID);
-}
 
 export function GetProject(id: string): $CancellablePromise<projects$0.Project | null> {
     return $Call.ByID(1253198044, id);
@@ -114,12 +101,6 @@ export function ImportDocuments(projectId: string, files: projects$0.DocumentInp
     return $Call.ByID(4123750842, projectId, files);
 }
 
-/**
- * ImportProject restores a project from an ExportProject payload.
- */
-export function ImportProject(payload: string): $CancellablePromise<projects$0.Project | null> {
-    return $Call.ByID(1717590993, payload);
-}
 
 /**
  * ListEvalCases returns the test cases of an evaluation set.
@@ -157,12 +138,6 @@ export function ReindexDocument(projectID: string, documentID: string): $Cancell
     return $Call.ByID(953406149, projectID, documentID);
 }
 
-/**
- * RestoreAll imports every project from a BackupAll payload.
- */
-export function RestoreAll(payload: string): $CancellablePromise<void> {
-    return $Call.ByID(1331235056, payload);
-}
 
 /**
  * RetrieveChunks embeds a query and returns the closest chunks of one project.
