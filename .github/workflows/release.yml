@@ -105,7 +105,11 @@ jobs:
             -ldflags="-s -w -X rag_project/internal/update.Version=${VERSION}" \
             -o dist/rag-studio .
       - name: Install signing tools
-        run: sudo apt-get update && sudo apt-get install -y dpkg-sig
+        run: |
+          sudo apt-get install -y libconfig-file-perl
+          curl -fsSL -o /tmp/dpkg-sig.deb \
+            https://deb.debian.org/debian/pool/main/d/dpkg-sig/dpkg-sig_0.13.1+nmu4_all.deb
+          sudo dpkg -i /tmp/dpkg-sig.deb || sudo apt-get -f install -y
       - name: Build .deb
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
@@ -116,6 +120,7 @@ jobs:
           name: deb-${{ matrix.arch }}
           path: |
             release/*.deb
+            release/*.deb.asc
             release/*.gpg.key
 
   windows-installer:
@@ -195,10 +200,10 @@ jobs:
             sha256sum -c SHA256SUMS --ignore-missing
             ```
             Debian/Ubuntu (.deb) packages are GPG-signed when the release key is
-            configured. Import `rag-studio-release.gpg.key` and run:
+            configured. Import `rag-studio-release.gpg.key` and verify either way:
             ```
-            sudo apt install dpkg-sig
             dpkg-sig --verify rag-studio_*.deb
+            gpg --verify rag-studio_*.deb.asc rag-studio_*.deb
             ```
             The Windows installer is Authenticode-signed when a code-signing
             certificate is configured.

@@ -294,8 +294,10 @@ Paket `.deb` ditandatangani dengan kunci rilis RAG Studio. Import kunci publik d
 ```bash
 gpg --import docs/rag-studio-release.gpg.key
 gpg --fingerprint 863320B6B89B26B2988B55883D8DC7AC7D242CF0
-sudo apt install dpkg-sig
+# Cara 1: tanda tangan dpkg
 dpkg-sig --verify rag-studio_*.deb
+# Cara 2: tanda tangan detached
+gpg --verify rag-studio_*.deb.asc rag-studio_*.deb
 ```
 
 Fingerprint kunci rilis: **`863320B6B89B26B2988B55883D8DC7AC7D242CF0`**.
