@@ -155,7 +155,18 @@ jobs:
         with:
           path: release
           merge-multiple: true
+      - name: Generate SHA256 checksums
+        run: |
+          cd release
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
       - uses: softprops/action-gh-release@v2
         with:
           files: release/*
           generate_release_notes: true
+          body: |
+            Verify downloads with:
+            ```
+            sha256sum -c SHA256SUMS --ignore-missing
+            ```
+            SHA256SUMS is attached to this release.
