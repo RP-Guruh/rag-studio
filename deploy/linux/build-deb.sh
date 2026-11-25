@@ -43,7 +43,8 @@ if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
   # CI has no TTY: force loopback pinentry with an empty passphrase.
   : > "$GNUPGHOME/passphrase"
   GPG_OPTS="--pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --batch --yes"
-  printf 'allow-loopback-pinentry\n' >> "$GNUPGHOME/gpg.conf"
+  printf 'allow-loopback-pinentry\n' > "$GNUPGHOME/gpg-agent.conf"
+  gpgconf --kill gpg-agent 2>/dev/null || true
   dpkg-sig --sign builder -k "$KEY_ID" -g "$GPG_OPTS" "$DEB"
   gpg --armor --export "$KEY_ID" > "$OUT/rag-studio-release.gpg.key"
   gpg $GPG_OPTS --armor --detach-sign --output "$DEB.asc" "$DEB"
