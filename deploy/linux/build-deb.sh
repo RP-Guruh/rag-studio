@@ -11,10 +11,25 @@ VERSION_NUM="${VERSION#v}"
 ROOT="$(mktemp -d)"
 trap 'rm -rf "$ROOT"' EXIT
 
-mkdir -p "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/usr/share/rag-studio/deploy/local" "$ROOT/usr/share/doc/rag-studio"
+mkdir -p "$ROOT/DEBIAN" "$ROOT/usr/bin" "$ROOT/usr/share/rag-studio/deploy/local" \
+  "$ROOT/usr/share/doc/rag-studio" "$ROOT/usr/share/applications" \
+  "$ROOT/usr/share/pixmaps" "$ROOT/usr/share/icons/hicolor/512x512/apps"
 install -m 755 "$BIN" "$ROOT/usr/bin/rag-studio"
 cp deploy/local/docker-compose.yml "$ROOT/usr/share/rag-studio/deploy/local/docker-compose.yml"
 cp README.md "$ROOT/usr/share/doc/rag-studio/README.md"
+install -m 644 deploy/linux/rag-studio.desktop "$ROOT/usr/share/applications/rag-studio.desktop"
+install -m 644 build/appicon.png "$ROOT/usr/share/pixmaps/rag-studio.png"
+install -m 644 build/appicon.png "$ROOT/usr/share/icons/hicolor/512x512/apps/rag-studio.png"
+
+cat > "$ROOT/DEBIAN/postinst" <<'EOF'
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+  update-desktop-database /usr/share/applications 2>/dev/null || true
+  gtk-update-icon-cache -f -t /usr/share/icons/hicolor 2>/dev/null || true
+fi
+EOF
+chmod 755 "$ROOT/DEBIAN/postinst"
 
 cat > "$ROOT/DEBIAN/control" <<EOF
 Package: rag-studio

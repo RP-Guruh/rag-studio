@@ -32,8 +32,9 @@ Source: "..\..\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\deploy\local\docker-compose.yml"; DestDir: "{app}\deploy\local"; Flags: ignoreversion
 
 [Icons]
-Name: "{group}\{#AppName}"; Filename: "{app}\rag-studio.exe"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\rag-studio.exe"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\rag-studio.exe"; IconFilename: "{app}\rag-studio.exe"
+Name: "{group}\{#AppName}"; Filename: "{app}\rag-studio.exe"; IconFilename: "{app}\rag-studio.exe"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\rag-studio.exe"; IconFilename: "{app}\rag-studio.exe"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\rag-studio.exe"; Description: "Launch RAG Studio"; Flags: nowait postinstall skipifsilent

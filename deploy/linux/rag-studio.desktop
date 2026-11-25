@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=RAG Studio
+Comment=Desktop workspace for testing RAG projects
+Exec=/usr/bin/rag-studio
+Icon=rag-studio
+Terminal=false
+Categories=Utility;Development;
+Keywords=rag;retrieval;knowledge;
+Version=1.0
+StartupNotify=true
