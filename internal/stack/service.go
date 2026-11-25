@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wailsapp/wails/v3/pkg/application"
+
 	"rag_project/internal/settings"
 )
 
@@ -87,6 +89,14 @@ type Service struct {
 	dir   string
 }
 
+func emitStackProgress(stage, message string) {
+	app := application.Get()
+	if app == nil {
+		return
+	}
+	app.Event.Emit("stack:progress", map[string]string{"stage": stage, "message": message})
+}
+
 func NewService(store *settings.Store) *Service {
 	dir := ""
 	if base, err := os.UserConfigDir(); err == nil {
@@ -146,6 +156,7 @@ func (s *Service) StackStatus() (Status, error) {
 // StartLocalStack writes the compose files and starts the containers.
 // Command output is returned in Result so the UI can show the real Docker error.
 func (s *Service) StartLocalStack() (Result, error) {
+	emitStackProgress("checking", "Checking Docker...")
 	if err := s.ensureDir(); err != nil {
 		return Result{Success: false, Message: err.Error()}, nil
 	}
@@ -156,20 +167,26 @@ func (s *Service) StartLocalStack() (Result, error) {
 	if !status.Docker {
 		return Result{Success: false, Message: "Docker is not ready. " + status.Detail}, nil
 	}
+
+	emitStackProgress("prepare", "Writing Docker Compose files...")
 	if err := s.writeFiles(); err != nil {
 		return Result{Success: false, Message: err.Error()}, nil
 	}
+
+	emitStackProgress("start", "Starting containers. Pulling images can take a few minutes.")
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	cmd.Dir = s.dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return s.composeFailure("up", output, err)
 	}
+	emitStackProgress("done", "Local stack started.")
 	return Result{Success: true, Message: "Local stack started. Waiting for services to become healthy."}, nil
 }
 
 func (s *Service) composeFailure(action string, output []byte, err error) (Result, error) {
 	message := strings.TrimSpace(string(output))
+	emitStackProgress("failed", "docker compose "+action+" failed")
 	if message == "" {
 		message = err.Error()
 	}
@@ -216,6 +233,7 @@ func (s *Service) StartLocalStackClean() (Result, error) {
 		return Result{Success: false, Message: err.Error()}, nil
 	}
 
+	emitStackProgress("start", "Starting containers with an isolated Docker config. Pulling images may take a few minutes.")
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	cmd.Dir = s.dir
 	cmd.Env = append(os.Environ(), "DOCKER_CONFIG="+configDir)
@@ -223,6 +241,7 @@ func (s *Service) StartLocalStackClean() (Result, error) {
 	if err != nil {
 		return s.composeFailure("up", output, err)
 	}
+	emitStackProgress("done", "Local stack started with an isolated Docker config.")
 	return Result{Success: true, Message: "Local stack started with an isolated Docker config."}, nil
 }
 

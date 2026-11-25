@@ -35,6 +35,7 @@ const downloadProgress = ref(0)
 const downloadedPath = ref('')
 const busyStack = ref(false)
 const credentialIssue = ref(false)
+const stackStage = ref('')
 
 onMounted(async () => {
   try {
@@ -47,6 +48,11 @@ onMounted(async () => {
   Events.On('update:progress', (event: { data: unknown }) => {
     const data = event.data as { percent?: number }
     if (typeof data?.percent === 'number') downloadProgress.value = data.percent
+  })
+
+  Events.On('stack:progress', (event: { data: unknown }) => {
+    const data = event.data as { stage?: string; message?: string }
+    if (data?.message) stackStage.value = data.message
   })
 })
 
@@ -61,6 +67,8 @@ async function refreshStack() {
 async function handleStartStack() {
   busyStack.value = true
   error.value = ''
+  message.value = ''
+  stackStage.value = 'Starting local stack...'
   try {
     credentialIssue.value = false
     const result = await startLocalStack()
@@ -76,12 +84,15 @@ async function handleStartStack() {
     error.value = errorText(err)
   } finally {
     busyStack.value = false
+    stackStage.value = ''
   }
 }
 
 async function handleStartStackClean() {
   busyStack.value = true
   error.value = ''
+  message.value = ''
+  stackStage.value = 'Starting local stack with a clean Docker config...'
   try {
     const result = await startLocalStackClean()
     if (result) {
@@ -98,6 +109,7 @@ async function handleStartStackClean() {
     error.value = errorText(err)
   } finally {
     busyStack.value = false
+    stackStage.value = ''
   }
 }
 
@@ -261,8 +273,11 @@ const items = [
         <span>Ollama: {{ stack.ollama ? 'detected' : 'not detected' }}</span>
       </div>
       <div v-if="stack?.detail" class="health-detail">{{ stack.detail }}</div>
+      <div v-if="stackStage" class="stack-stage">{{ stackStage }}</div>
       <div class="row-actions">
-        <button type="button" class="action-btn" :disabled="busyStack" @click="handleStartStack">Start local stack</button>
+        <button type="button" class="action-btn" :disabled="busyStack" @click="handleStartStack">
+          {{ busyStack ? 'Starting…' : 'Start local stack' }}
+        </button>
         <button
           v-if="credentialIssue"
           type="button"
@@ -270,9 +285,11 @@ const items = [
           :disabled="busyStack"
           @click="handleStartStackClean"
         >
-          Retry with clean Docker config
+          {{ busyStack ? 'Retrying…' : 'Retry with clean Docker config' }}
         </button>
-        <button type="button" class="action-btn" :disabled="busyStack" @click="handleStopStack">Stop</button>
+        <button type="button" class="action-btn" :disabled="busyStack" @click="handleStopStack">
+          {{ busyStack ? 'Stopping…' : 'Stop' }}
+        </button>
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleApplyPreset">Use local preset</button>
         <button type="button" class="action-btn" @click="refreshStack">Refresh</button>
       </div>
@@ -367,6 +384,14 @@ const items = [
 .card-title {
   font-size: var(--font-size-base);
   margin: 0 0 var(--space-8);
+}
+
+.stack-stage {
+  font-size: var(--font-size-sm);
+  color: var(--color-accent);
+  padding: var(--space-8) var(--space-12);
+  background-color: var(--color-accent-subtle);
+  border-radius: var(--radius-sm);
 }
 
 .stack-status {
