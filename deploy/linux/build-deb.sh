@@ -31,5 +31,17 @@ Description: Desktop RAG Studio for knowledge bases and personas
 EOF
 
 mkdir -p "$OUT"
-dpkg-deb --build --root-owner-group "$ROOT" "$OUT/rag-studio_${VERSION_NUM}_${ARCH}.deb"
-echo "$OUT/rag-studio_${VERSION_NUM}_${ARCH}.deb"
+DEB="$OUT/rag-studio_${VERSION_NUM}_${ARCH}.deb"
+dpkg-deb --build --root-owner-group "$ROOT" "$DEB"
+
+if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
+  export GNUPGHOME
+  GNUPGHOME="$(mktemp -d)"
+  chmod 700 "$GNUPGHOME"
+  printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+  KEY_ID="${GPG_KEY_ID:-863320B6B89B26B2988B55883D8DC7AC7D242CF0}"
+  dpkg-sig --sign builder -k "$KEY_ID" "$DEB"
+  gpg --armor --export "$KEY_ID" > "$OUT/rag-studio-release.gpg.key"
+fi
+
+echo "$DEB"

@@ -104,15 +104,25 @@ jobs:
           go build -tags production,purego,gtk3 -trimpath \
             -ldflags="-s -w -X rag_project/internal/update.Version=${VERSION}" \
             -o dist/rag-studio .
+      - name: Install signing tools
+        run: sudo apt-get update && sudo apt-get install -y dpkg-sig
       - name: Build .deb
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: bash deploy/linux/build-deb.sh dist/rag-studio "${{ github.ref_name }}" "${{ matrix.arch }}" release
       - uses: actions/upload-artifact@v4
         with:
           name: deb-${{ matrix.arch }}
-          path: release/*.deb
+          path: |
+            release/*.deb
+            release/*.gpg.key
 
   windows-installer:
     runs-on: windows-latest
+    env:
+      WINDOWS_PFX_BASE64: ${{ secrets.WINDOWS_PFX_BASE64 }}
+      WINDOWS_PFX_PASSWORD: ${{ secrets.WINDOWS_PFX_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -136,12 +146,27 @@ jobs:
           go build -tags production -trimpath `
             -ldflags="-s -w -X rag_project/internal/update.Version=${env:VERSION}" `
             -o dist/rag-studio.exe .
+      - name: Sign executable
+        if: env.WINDOWS_PFX_BASE64 != ''
+        run: |
+          [IO.File]::WriteAllBytes("release\rag-studio.pfx", [Convert]::FromBase64String($env:WINDOWS_PFX_BASE64))
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $signtool) { throw "signtool.exe not found on runner" }
+          & $signtool sign /f release\rag-studio.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 dist\rag-studio.exe
       - name: Build installer with Inno Setup
         env:
           VERSION: ${{ github.ref_name }}
         run: |
           $version = $env:VERSION.TrimStart('v')
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" /dAppVersion=$version deploy\windows\installer.iss
+      - name: Sign installer
+        if: env.WINDOWS_PFX_BASE64 != ''
+        run: |
+          $signtool = (Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin\*\x64\signtool.exe" -ErrorAction SilentlyContinue | Select-Object -First 1).FullName
+          if (-not $signtool) { throw "signtool.exe not found on runner" }
+          Get-ChildItem release\*.exe | ForEach-Object {
+            & $signtool sign /f release\rag-studio.pfx /p $env:WINDOWS_PFX_PASSWORD /tr http://timestamp.digicert.com /td sha256 /fd sha256 $_.FullName
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
@@ -169,4 +194,11 @@ jobs:
             ```
             sha256sum -c SHA256SUMS --ignore-missing
             ```
-            SHA256SUMS is attached to this release.
+            Debian/Ubuntu (.deb) packages are GPG-signed when the release key is
+            configured. Import `rag-studio-release.gpg.key` and run:
+            ```
+            sudo apt install dpkg-sig
+            dpkg-sig --verify rag-studio_*.deb
+            ```
+            The Windows installer is Authenticode-signed when a code-signing
+            certificate is configured.

@@ -281,6 +281,27 @@ erDiagram
     └── docling/                # adapter doclingclient → Chunker
 ```
 
+## Verifikasi rilis
+
+Setiap rilis menyertakan `SHA256SUMS`. Verifikasi:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+Paket `.deb` ditandatangani dengan kunci rilis RAG Studio. Import kunci publik dari repo (`docs/rag-studio-release.gpg.key`) atau dari aset rilis:
+
+```bash
+gpg --import docs/rag-studio-release.gpg.key
+gpg --fingerprint 863320B6B89B26B2988B55883D8DC7AC7D242CF0
+sudo apt install dpkg-sig
+dpkg-sig --verify rag-studio_*.deb
+```
+
+Fingerprint kunci rilis: **`863320B6B89B26B2988B55883D8DC7AC7D242CF0`**.
+
+Untuk maintainer: workflow membutuhkan GitHub Secrets `GPG_PRIVATE_KEY` (private key ASCII-armored, tanpa passphrase) dan opsional `GPG_KEY_ID`. Installer Windows ditandatangani jika secret `WINDOWS_PFX_BASE64` (sertifikat `.pfx` base64) dan `WINDOWS_PFX_PASSWORD` tersedia. Tanpa keduanya, file tetap dihasilkan tetapi peringatan kepercayaan akan muncul.
+
 ## Deployment & download
 
 Installer didistribusikan lewat **GitHub Releases**: `https://github.com/RP-Guruh/rag-studio/releases`.
