@@ -195,6 +195,7 @@ jobs:
         with:
           files: release/*
           generate_release_notes: true
+          overwrite_files: true
           body: |
             Verify downloads with:
             ```

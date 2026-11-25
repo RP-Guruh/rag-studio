@@ -62,11 +62,16 @@ const (
 
 // Status describes which local services are reachable.
 type Status struct {
-	Docker    bool   `json:"docker"`
-	Postgres  bool   `json:"postgres"`
-	Docling   bool   `json:"docling"`
-	Ollama    bool   `json:"ollama"`
-	Directory string `json:"directory"`
+	DockerInstalled bool   `json:"dockerInstalled"`
+	ComposePlugin   bool   `json:"composePlugin"`
+	Daemon          bool   `json:"daemon"`
+	Permission      bool   `json:"permission"`
+	Docker          bool   `json:"docker"`
+	Postgres        bool   `json:"postgres"`
+	Docling         bool   `json:"docling"`
+	Ollama          bool   `json:"ollama"`
+	Directory       string `json:"directory"`
+	Detail          string `json:"detail"`
 }
 
 // Result is the outcome of a stack operation.
@@ -98,10 +103,39 @@ func (s *Service) ensureDir() error {
 
 // StackStatus checks Docker availability and service reachability.
 func (s *Service) StackStatus() (Status, error) {
-	status := Status{Directory: s.dir}
-	if _, err := exec.LookPath("docker"); err == nil {
-		status.Docker = exec.Command("docker", "compose", "version").Run() == nil
+	status := Status{Directory: s.dir, Permission: true}
+	problems := []string{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Second)
+	defer cancel()
+
+	if _, err := exec.LookPath("docker"); err != nil {
+		problems = append(problems, "Docker CLI was not found. Install Docker Engine first.")
+	} else {
+		status.DockerInstalled = true
+
+		if _, err := exec.CommandContext(ctx, "docker", "compose", "version").CombinedOutput(); err != nil {
+			problems = append(problems, "Docker Compose plugin is missing. Install docker-compose-plugin.")
+		} else {
+			status.ComposePlugin = true
+		}
+
+		output, err := exec.CommandContext(ctx, "docker", "info").CombinedOutput()
+		if err != nil {
+			text := strings.ToLower(string(output))
+			if strings.Contains(text, "permission denied") || strings.Contains(text, "sock") {
+				status.Permission = false
+				problems = append(problems, "Docker socket is not accessible. Add the user to the docker group and sign in again.")
+			} else {
+				problems = append(problems, "Docker daemon is not running. Start it with systemctl enable --now docker.")
+			}
+		} else {
+			status.Daemon = true
+		}
 	}
+
+	status.Docker = status.DockerInstalled && status.ComposePlugin && status.Daemon && status.Permission
+	status.Detail = strings.Join(problems, " ")
 	status.Postgres = tcpReachable(fmt.Sprintf("%s:%d", dbHost, dbPort))
 	status.Docling = httpReachable(doclingURL + "/health")
 	status.Ollama = httpReachable(ollamaURL + "/api/tags")
@@ -109,18 +143,30 @@ func (s *Service) StackStatus() (Status, error) {
 }
 
 // StartLocalStack writes the compose files and starts the containers.
+// Command output is returned in Result so the UI can show the real Docker error.
 func (s *Service) StartLocalStack() (Result, error) {
 	if err := s.ensureDir(); err != nil {
-		return Result{}, err
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+	status, err := s.StackStatus()
+	if err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+	if !status.Docker {
+		return Result{Success: false, Message: "Docker is not ready. " + status.Detail}, nil
 	}
 	if err := s.writeFiles(); err != nil {
-		return Result{}, err
+		return Result{Success: false, Message: err.Error()}, nil
 	}
 	cmd := exec.Command("docker", "compose", "up", "-d")
 	cmd.Dir = s.dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return Result{Message: string(output)}, fmt.Errorf("docker compose up: %w", err)
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			message = err.Error()
+		}
+		return Result{Success: false, Message: "docker compose up failed: " + message}, nil
 	}
 	return Result{Success: true, Message: "Local stack started. Waiting for services to become healthy."}, nil
 }
@@ -128,13 +174,17 @@ func (s *Service) StartLocalStack() (Result, error) {
 // StopLocalStack stops the containers without deleting data volumes.
 func (s *Service) StopLocalStack() (Result, error) {
 	if s.dir == "" {
-		return Result{}, fmt.Errorf("stack directory is unavailable")
+		return Result{Success: false, Message: "Stack directory is unavailable."}, nil
 	}
 	cmd := exec.Command("docker", "compose", "down")
 	cmd.Dir = s.dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return Result{Message: string(output)}, fmt.Errorf("docker compose down: %w", err)
+		message := strings.TrimSpace(string(output))
+		if message == "" {
+			message = err.Error()
+		}
+		return Result{Success: false, Message: "docker compose down failed: " + message}, nil
 	}
 	return Result{Success: true, Message: "Local stack stopped. Data volume is preserved."}, nil
 }

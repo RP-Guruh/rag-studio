@@ -13,9 +13,14 @@ export interface Result {
  * Status describes which local services are reachable.
  */
 export interface Status {
+    "dockerInstalled": boolean;
+    "composePlugin": boolean;
+    "daemon": boolean;
+    "permission": boolean;
     "docker": boolean;
     "postgres": boolean;
     "docling": boolean;
     "ollama": boolean;
     "directory": string;
+    "detail": string;
 }

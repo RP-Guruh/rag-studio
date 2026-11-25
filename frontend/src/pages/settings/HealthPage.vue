@@ -54,7 +54,10 @@ async function handleStartStack() {
   error.value = ''
   try {
     const result = await startLocalStack()
-    if (result) message.value = result.message
+    if (result) {
+      if (result.success) message.value = result.message
+      else error.value = result.message
+    }
     await refreshStack()
   } catch (err) {
     error.value = errorText(err)
@@ -67,7 +70,10 @@ async function handleStopStack() {
   busyStack.value = true
   try {
     const result = await stopLocalStack()
-    if (result) message.value = result.message
+    if (result) {
+      if (result.success) message.value = result.message
+      else error.value = result.message
+    }
     await refreshStack()
   } catch (err) {
     error.value = errorText(err)
@@ -81,7 +87,10 @@ async function handleApplyPreset() {
   error.value = ''
   try {
     const result = await applyLocalPreset()
-    if (result) message.value = result.message
+    if (result) {
+      if (result.success) message.value = result.message
+      else error.value = result.message
+    }
     settings.value = await loadSettings()
   } catch (err) {
     error.value = errorText(err)
@@ -192,11 +201,15 @@ const items = [
         PostgreSQL + pgvector and docling-serve run in Docker. Ollama is installed by you.
       </p>
       <div v-if="stack" class="stack-status">
-        <span>Docker: {{ stack.docker ? 'ready' : 'missing' }}</span>
+        <span>Docker CLI: {{ stack.dockerInstalled ? 'found' : 'missing' }}</span>
+        <span>Compose plugin: {{ stack.composePlugin ? 'ready' : 'missing' }}</span>
+        <span>Daemon: {{ stack.daemon ? 'running' : 'stopped' }}</span>
+        <span>Access: {{ stack.permission ? 'ok' : 'denied' }}</span>
         <span>PostgreSQL: {{ stack.postgres ? 'ready' : 'stopped' }}</span>
         <span>Docling: {{ stack.docling ? 'ready' : 'stopped' }}</span>
         <span>Ollama: {{ stack.ollama ? 'detected' : 'not detected' }}</span>
       </div>
+      <div v-if="stack?.detail" class="health-detail">{{ stack.detail }}</div>
       <div class="row-actions">
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleStartStack">Start local stack</button>
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleStopStack">Stop</button>

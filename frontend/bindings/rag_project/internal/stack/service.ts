@@ -31,6 +31,7 @@ export function StackStatus(): $CancellablePromise<$models.Status> {
 
 /**
  * StartLocalStack writes the compose files and starts the containers.
+ * Command output is returned in Result so the UI can show the real Docker error.
  */
 export function StartLocalStack(): $CancellablePromise<$models.Result> {
     return $Call.ByID(3011054872);
