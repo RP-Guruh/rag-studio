@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '../i18n'
+
 interface Props {
   status: 'Ready' | 'Processing' | 'Untrained' | 'Training' | 'Chunked' | 'Failed'
 }
@@ -9,7 +11,7 @@ defineProps<Props>()
 <template>
   <span :class="['badge', `badge--${status.toLowerCase()}`]">
     <span class="badge-dot" aria-hidden="true" />
-    {{ status }}
+    {{ t(status) }}
   </span>
 </template>
 

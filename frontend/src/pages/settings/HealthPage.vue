@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { Events } from '@wailsio/runtime'
+import { t } from '../../i18n'
 import {
   loadSettings,
   errorText,
@@ -66,7 +67,7 @@ async function handleStartStack() {
   busyStack.value = true
   error.value = ''
   message.value = ''
-  stackStage.value = 'Starting local stack...'
+  stackStage.value = t('Starting local stack...')
   try {
     credentialIssue.value = false
     const result = await startLocalStack()
@@ -90,7 +91,7 @@ async function handleStartStackClean() {
   busyStack.value = true
   error.value = ''
   message.value = ''
-  stackStage.value = 'Starting local stack with a clean Docker config...'
+  stackStage.value = t('Starting local stack with a clean Docker config...')
   try {
     const result = await startLocalStackClean()
     if (result) {
@@ -151,7 +152,7 @@ async function handleDownloadUpdate() {
     const path = await downloadLatestInstaller()
     if (path) {
       downloadedPath.value = path
-      message.value = `Installer downloaded to ${path}`
+      message.value = t('Installer downloaded to {{path}}', { path })
     }
   } catch (err) {
     error.value = errorText(err)
@@ -177,7 +178,7 @@ async function handleRestoreSettings(event: Event) {
   if (!file) return
   try {
     await restoreSettings(await file.text())
-    message.value = 'Settings restored. Restart the app to apply.'
+    message.value = t('Settings restored. Restart the app to apply.')
   } catch (err) {
     error.value = errorText(err)
   } finally {
@@ -202,18 +203,19 @@ function detail(section: Settings[keyof Settings]): string {
   return String(value.modelName || value.databaseName || value.baseUrl || '—')
 }
 
-const items = [
-  { key: 'chatModel', label: 'Chat model', path: '/settings/chat' },
-  { key: 'embeddingModel', label: 'Embedding model', path: '/settings/embedding' },
-  { key: 'database', label: 'Database', path: '/settings/database' },
-  { key: 'docling', label: 'Document processing', path: '/settings/docling' }
-] as const
+// Translated at render time through computed so locale changes take effect.
+const items = computed(() => [
+  { key: 'chatModel', label: t('Chat model'), path: '/settings/chat' },
+  { key: 'embeddingModel', label: t('Embedding model'), path: '/settings/embedding' },
+  { key: 'database', label: t('Database'), path: '/settings/database' },
+  { key: 'docling', label: t('Document processing'), path: '/settings/docling' }
+] as const)
 </script>
 
 <template>
   <div class="health-page">
-    <h2 class="section-title">Setup & health</h2>
-    <p class="section-hint">All four services must be configured before training a knowledge base.</p>
+    <h2 class="section-title">{{ t('settings.health') }}</h2>
+    <p class="section-hint">{{ t('All four services must be configured before training a knowledge base.') }}</p>
     <div v-if="error" class="health-error">{{ error }}</div>
     <div v-if="settings" class="health-grid">
       <router-link
@@ -224,7 +226,7 @@ const items = [
       >
         <span class="health-name">{{ item.label }}</span>
         <span :class="settings[item.key].configured ? 'health-ok' : 'health-missing'">
-          {{ settings[item.key].configured ? 'Configured' : 'Not configured' }}
+          {{ settings[item.key].configured ? t('Configured') : t('Not configured') }}
         </span>
         <span class="health-detail">{{ detail(settings[item.key]) }}</span>
       </router-link>
@@ -233,24 +235,24 @@ const items = [
     <div v-if="message" class="health-message">{{ message }}</div>
 
     <section class="health-card">
-      <h3 class="card-title">Local stack</h3>
+      <h3 class="card-title">{{ t('Local stack') }}</h3>
       <p class="section-hint">
-        PostgreSQL + pgvector and docling-serve run in Docker. Ollama is installed by you.
+        {{ t('PostgreSQL + pgvector and docling-serve run in Docker. Ollama is installed by you.') }}
       </p>
       <div v-if="stack" class="stack-status">
-        <span>Docker CLI: {{ stack.dockerInstalled ? 'found' : 'missing' }}</span>
-        <span>Compose plugin: {{ stack.composePlugin ? 'ready' : 'missing' }}</span>
-        <span>Daemon: {{ stack.daemon ? 'running' : 'stopped' }}</span>
-        <span>Access: {{ stack.permission ? 'ok' : 'denied' }}</span>
-        <span>PostgreSQL: {{ stack.postgres ? 'ready' : 'stopped' }}</span>
-        <span>Docling: {{ stack.docling ? 'ready' : 'stopped' }}</span>
-        <span>Ollama: {{ stack.ollama ? 'detected' : 'not detected' }}</span>
+        <span>{{ t('Docker CLI') }}: {{ stack.dockerInstalled ? t('found') : t('missing') }}</span>
+        <span>{{ t('Compose plugin') }}: {{ stack.composePlugin ? t('ready') : t('missing') }}</span>
+        <span>{{ t('Daemon') }}: {{ stack.daemon ? t('running') : t('stopped') }}</span>
+        <span>{{ t('Access') }}: {{ stack.permission ? t('ok') : t('denied') }}</span>
+        <span>{{ t('PostgreSQL') }}: {{ stack.postgres ? t('ready') : t('stopped') }}</span>
+        <span>{{ t('Docling') }}: {{ stack.docling ? t('ready') : t('stopped') }}</span>
+        <span>{{ t('Ollama') }}: {{ stack.ollama ? t('detected') : t('not detected') }}</span>
       </div>
       <div v-if="stack?.detail" class="health-detail">{{ stack.detail }}</div>
       <div v-if="stackStage" class="stack-stage">{{ stackStage }}</div>
       <div class="row-actions">
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleStartStack">
-          {{ busyStack ? 'Starting…' : 'Start local stack' }}
+          {{ busyStack ? t('Starting…') : t('Start local stack') }}
         </button>
         <button
           v-if="credentialIssue"
@@ -259,41 +261,41 @@ const items = [
           :disabled="busyStack"
           @click="handleStartStackClean"
         >
-          {{ busyStack ? 'Retrying…' : 'Retry with clean Docker config' }}
+          {{ busyStack ? t('Retrying…') : t('Retry with clean Docker config') }}
         </button>
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleStopStack">
-          {{ busyStack ? 'Stopping…' : 'Stop' }}
+          {{ busyStack ? t('Stopping…') : t('Stop') }}
         </button>
-        <button type="button" class="action-btn" :disabled="busyStack" @click="handleApplyPreset">Use local preset</button>
-        <button type="button" class="action-btn" @click="refreshStack">Refresh</button>
+        <button type="button" class="action-btn" :disabled="busyStack" @click="handleApplyPreset">{{ t('Use local preset') }}</button>
+        <button type="button" class="action-btn" @click="refreshStack">{{ t('Refresh') }}</button>
       </div>
-      <a class="action-btn" href="https://ollama.com/download" target="_blank" rel="noopener">Install Ollama</a>
+      <a class="action-btn" href="https://ollama.com/download" target="_blank" rel="noopener">{{ t('Install Ollama') }}</a>
     </section>
 
     <section class="health-card">
-      <h3 class="card-title">Restore settings</h3>
+      <h3 class="card-title">{{ t('Restore settings') }}</h3>
       <div class="row-actions">
         <label class="action-btn">
-          Restore settings (.db)
+          {{ t('Restore settings (.db)') }}
           <input type="file" accept=".db,.sqlite" @change="handleRestoreSettings" />
         </label>
       </div>
     </section>
 
     <section class="health-card">
-      <h3 class="card-title">Application update</h3>
+      <h3 class="card-title">{{ t('Application update') }}</h3>
       <div class="row-actions">
         <button type="button" class="action-btn" :disabled="checking" @click="handleCheckUpdate">
-          {{ checking ? 'Checking…' : 'Check for updates' }}
+          {{ checking ? t('Checking…') : t('Check for updates') }}
         </button>
-        <button type="button" class="action-btn" @click="openReleasePage">Open releases</button>
+        <button type="button" class="action-btn" @click="openReleasePage">{{ t('Open releases') }}</button>
         <button
           v-if="updateInfo?.updateAvailable && updateInfo.assetUrl"
           type="button"
           class="action-btn"
           @click="handleDownloadUpdate"
         >
-          Download update
+          {{ t('Download update') }}
         </button>
         <button
           v-if="downloadedPath"
@@ -301,16 +303,16 @@ const items = [
           class="action-btn"
           @click="handleInstallUpdate"
         >
-          Install update
+          {{ t('Install update') }}
         </button>
       </div>
       <div v-if="downloadProgress > 0 && downloadProgress < 100" class="health-detail">
-        Downloading… {{ downloadProgress }}%
+        {{ t('Downloading…') }} {{ downloadProgress }}%
       </div>
       <div v-if="updateInfo" class="health-detail">
-        Current {{ updateInfo.currentVersion }} · Latest {{ updateInfo.latestVersion || 'unknown' }}
-        <span v-if="updateInfo.updateAvailable" class="health-missing"> — update available</span>
-        <span v-else class="health-ok"> — up to date</span>
+        {{ t('Current') }} {{ updateInfo.currentVersion }} · {{ t('Latest') }} {{ updateInfo.latestVersion || t('unknown') }}
+        <span v-if="updateInfo.updateAvailable" class="health-missing"> {{ t('— update available') }}</span>
+        <span v-else class="health-ok"> {{ t('— up to date') }}</span>
       </div>
     </section>
   </div>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { t } from '../../i18n'
 import BaseButton from '../../components/BaseButton.vue'
 import FormField from '../../components/FormField.vue'
 import { listProjects } from '../../services/projects'
@@ -44,7 +45,7 @@ async function handleCreate() {
   error.value = ''
   success.value = ''
   if (!email.value.trim() || password.value.length < 8) {
-    error.value = 'Enter an email and a password of at least 8 characters.'
+    error.value = t('Enter an email and a password of at least 8 characters.')
     return
   }
   busy.value = true
@@ -53,7 +54,7 @@ async function handleCreate() {
     email.value = ''
     password.value = ''
     selectedProjects.value = []
-    success.value = 'User created.'
+    success.value = t('User created.')
     await reload()
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
@@ -68,7 +69,7 @@ async function handleSaveAssignments(user: User, event: Event) {
   ).map((input) => input.value)
   try {
     await updateUserProjects(user.id, checked)
-    success.value = `Projects updated for ${user.email}.`
+    success.value = t('Projects updated for {{email}}.', { email: user.email })
     await reload()
   } catch (err) {
     error.value = err instanceof Error ? err.message : String(err)
@@ -76,7 +77,7 @@ async function handleSaveAssignments(user: User, event: Event) {
 }
 
 async function handleDelete(user: User) {
-  if (!confirm(`Delete account ${user.email}?`)) return
+  if (!confirm(t('Delete account {{email}}?', { email: user.email }))) return
   try {
     await deleteUser(user.id)
     await reload()
@@ -89,29 +90,29 @@ async function handleDelete(user: User) {
 
 <template>
   <div class="users-page">
-    <h2 class="section-title">Users & project access</h2>
-    <p class="section-hint">Sub-users can only manage the projects you assign to them.</p>
+    <h2 class="section-title">{{ t('Users & project access') }}</h2>
+    <p class="section-hint">{{ t('Sub-users can only manage the projects you assign to them.') }}</p>
 
     <div v-if="error" class="users-error">{{ error }}</div>
     <div v-if="success" class="users-success">{{ success }}</div>
 
     <section class="users-card">
-      <h3 class="card-title">Accounts</h3>
-      <div v-if="users.length === 0" class="users-empty">No accounts yet.</div>
+      <h3 class="card-title">{{ t('Accounts') }}</h3>
+      <div v-if="users.length === 0" class="users-empty">{{ t('No accounts yet.') }}</div>
       <div v-else class="users-table-wrap">
         <table class="users-table">
           <thead>
             <tr>
-              <th>Email</th>
-              <th>Role</th>
-              <th>Assigned projects</th>
+              <th>{{ t('auth.email') }}</th>
+              <th>{{ t('Role') }}</th>
+              <th>{{ t('Assigned projects') }}</th>
               <th></th>
             </tr>
           </thead>
           <tbody>
             <tr v-for="user in users" :key="user.id">
               <td class="mono">{{ user.email }}</td>
-              <td>{{ user.role }}</td>
+              <td>{{ t(user.role) }}</td>
               <td>
                 <div v-if="user.role === 'user'" class="assignment-cell">
                   <label
@@ -123,7 +124,7 @@ async function handleDelete(user: User) {
                     {{ project.name }}
                   </label>
                   <BaseButton variant="outline" size="sm" type="button" @click="handleSaveAssignments(user, $event)">
-                    Save access
+                    {{ t('Save access') }}
                   </BaseButton>
                 </div>
                 <span v-else class="muted">—</span>
@@ -136,7 +137,7 @@ async function handleDelete(user: User) {
                   type="button"
                   @click="handleDelete(user)"
                 >
-                  Delete
+                  {{ t('Delete') }}
                 </BaseButton>
               </td>
             </tr>
@@ -146,13 +147,13 @@ async function handleDelete(user: User) {
     </section>
 
     <section class="users-card">
-      <h3 class="card-title">Add sub-user</h3>
+      <h3 class="card-title">{{ t('Add sub-user') }}</h3>
       <div class="create-grid">
-        <FormField label="Email" id="new-user-email">
-          <input id="new-user-email" v-model="email" type="email" placeholder="name@company.com" />
+        <FormField :label="t('auth.email')" id="new-user-email">
+          <input id="new-user-email" v-model="email" type="email" :placeholder="t('name@company.com')" />
         </FormField>
-        <FormField label="Password" id="new-user-password">
-          <input id="new-user-password" v-model="password" type="password" placeholder="At least 8 characters" />
+        <FormField :label="t('auth.password')" id="new-user-password">
+          <input id="new-user-password" v-model="password" type="password" :placeholder="t('At least 8 characters')" />
         </FormField>
       </div>
       <div class="project-options">
@@ -162,7 +163,7 @@ async function handleDelete(user: User) {
         </label>
       </div>
       <BaseButton variant="primary" type="button" :disabled="busy" @click="handleCreate">
-        {{ busy ? 'Creating…' : 'Create user' }}
+        {{ busy ? t('Creating…') : t('Create user') }}
       </BaseButton>
     </section>
 

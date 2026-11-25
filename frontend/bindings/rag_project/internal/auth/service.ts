@@ -15,7 +15,7 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
- * Authorize rejects operations on projects the current user may not manage.
+ * Authorize is kept as an alias for read access to a project.
  */
 export function Authorize(projectID: string): $CancellablePromise<void> {
     return $Call.ByID(3194311396, projectID);
@@ -36,7 +36,7 @@ export function CurrentUser(): $CancellablePromise<$models.User | null> {
 }
 
 /**
- * DeleteUser removes a sub-account. Administrator and guest cannot be removed.
+ * DeleteUser removes a sub-account. The administrator cannot be removed.
  */
 export function DeleteUser(userID: string): $CancellablePromise<void> {
     return $Call.ByID(2706231017, userID);
@@ -73,6 +73,15 @@ export function Logout(): $CancellablePromise<void> {
 }
 
 /**
+ * PruneInvalidSessions drops sessions that point at a deleted or removed
+ * account. Guest accounts were removed in v0.1.1, so old installs can still
+ * hold a guest session that would otherwise look signed in forever.
+ */
+export function PruneInvalidSessions(): $CancellablePromise<void> {
+    return $Call.ByID(542636143);
+}
+
+/**
  * Register creates the first account, which becomes the administrator.
  */
 export function Register(email: string, password: string): $CancellablePromise<$models.User | null> {
@@ -80,10 +89,38 @@ export function Register(email: string, password: string): $CancellablePromise<$
 }
 
 /**
- * RequireManager rejects signed-out users.
+ * RequireAdmin rejects everyone except the administrator account.
  */
-export function RequireManager(): $CancellablePromise<void> {
-    return $Call.ByID(2962019279);
+export function RequireAdmin(): $CancellablePromise<void> {
+    return $Call.ByID(1843343959);
+}
+
+/**
+ * RequireProjectView allows read access to a project for admins and for users
+ * it has been assigned to.
+ */
+export function RequireProjectView(projectID: string): $CancellablePromise<void> {
+    return $Call.ByID(1349994888, projectID);
+}
+
+/**
+ * RequireProjectWrite reserves project changes for the administrator.
+ * Sub-users are viewers: they can read and query assigned projects but cannot
+ * modify them. Introduce a separate editor role if granular write access is
+ * needed later.
+ */
+export function RequireProjectWrite(projectID: string): $CancellablePromise<void> {
+    return $Call.ByID(2394680684, projectID);
+}
+
+/**
+ * RequireSetupOrAdmin allows configuration while the application has no
+ * accounts (first-run setup) and requires an administrator afterwards. This
+ * keeps the setup pages reachable before the first admin is registered without
+ * leaving them open to signed-in sub-users.
+ */
+export function RequireSetupOrAdmin(): $CancellablePromise<void> {
+    return $Call.ByID(3557840211);
 }
 
 /**

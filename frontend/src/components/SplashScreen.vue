@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import AppLogo from './AppLogo.vue'
+import { t } from '../i18n'
 
 const emit = defineEmits<{
   (e: 'finish'): void
@@ -45,8 +46,8 @@ function triggerExit() {
     <div class="splash-content">
       <AppLogo :size="56" />
       <div class="brand-text-group">
-        <h1 class="splash-brand-title">RAG Studio</h1>
-        <p class="splash-brand-tagline">Knowledge base workspace</p>
+        <h1 class="splash-brand-title">{{ t('RAG Studio') }}</h1>
+        <p class="splash-brand-tagline">{{ t('Knowledge base workspace') }}</p>
       </div>
       <div class="splash-progress-track">
         <div class="splash-progress-bar" :style="{ width: `${progress}%` }" />

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import BaseDialog from './BaseDialog.vue'
 import BaseButton from './BaseButton.vue'
+import { computed } from 'vue'
+import { t } from '../i18n'
 
 interface Props {
   open: boolean
@@ -11,12 +13,10 @@ interface Props {
   variant?: 'primary' | 'danger'
 }
 
-withDefaults(defineProps<Props>(), {
-  title: 'Confirmation',
-  confirmText: 'Confirm',
-  cancelText: 'Cancel',
-  variant: 'primary'
-})
+const props = defineProps<Props>()
+const dialogTitle = computed(() => props.title || t('Confirmation'))
+const dialogConfirmText = computed(() => props.confirmText || t('Confirm'))
+const dialogCancelText = computed(() => props.cancelText || t('Cancel'))
 
 defineEmits<{
   (e: 'confirm'): void
@@ -25,7 +25,7 @@ defineEmits<{
 </script>
 
 <template>
-  <BaseDialog :open="open" :title="title" @close="$emit('cancel')">
+  <BaseDialog :open="open" :title="dialogTitle" @close="$emit('cancel')">
     <div class="confirm-content">
       <div v-if="variant === 'danger'" class="icon-danger">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -46,14 +46,14 @@ defineEmits<{
 
     <template #footer>
       <BaseButton variant="outline" type="button" @click="$emit('cancel')">
-        {{ cancelText }}
+        {{ dialogCancelText }}
       </BaseButton>
       <BaseButton
         :variant="variant === 'danger' ? 'danger' : 'primary'"
         type="button"
         @click="$emit('confirm')"
       >
-        {{ confirmText }}
+        {{ dialogConfirmText }}
       </BaseButton>
     </template>
   </BaseDialog>

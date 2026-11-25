@@ -49,7 +49,7 @@ Aset release tersedia di `https://github.com/RP-Guruh/rag-studio/releases`.
 **Debian/Ubuntu**
 
 ```bash
-sudo apt install ./rag-studio_0.1.1_amd64.deb
+sudo apt install ./rag-studio_0.1.2_amd64.deb
 rag-studio
 ```
 
@@ -57,14 +57,14 @@ Package `.deb` menarik dependensi `libgtk-4-1` dan `libwebkitgtk-6.0-4` lewat ap
 
 **Windows**
 
-Jalankan `rag-studio-0.1.1-windows-amd64-setup.exe`, lalu buka RAG Studio dari Start Menu. WebView2 biasanya sudah tersedia di Windows 10/11.
+Jalankan `rag-studio-0.1.2-windows-amd64-setup.exe`, lalu buka RAG Studio dari Start Menu. WebView2 biasanya sudah tersedia di Windows 10/11.
 
 **Arsip Linux/macOS**
 
 ```bash
 mkdir -p ~/rag-studio
 cd ~/rag-studio
-tar -xzf ~/Downloads/rag-studio-v0.1.1-linux-amd64.tar.gz
+tar -xzf ~/Downloads/rag-studio-v0.1.2-linux-amd64.tar.gz
 sudo apt install -y libgtk-4-1 libwebkitgtk-6.0-4
 chmod +x rag-studio
 ./rag-studio
@@ -382,8 +382,8 @@ Package `.deb` ditandatangani dengan kunci rilis. Import kunci publik dan verifi
 ```bash
 gpg --import docs/rag-studio-release.gpg.key
 gpg --fingerprint 863320B6B89B26B2988B55883D8DC7AC7D242CF0
-dpkg-sig --verify rag-studio_0.1.1_amd64.deb
-gpg --verify rag-studio_0.1.1_amd64.deb.asc rag-studio_0.1.1_amd64.deb
+dpkg-sig --verify rag-studio_0.1.2_amd64.deb
+gpg --verify rag-studio_0.1.2_amd64.deb.asc rag-studio_0.1.2_amd64.deb
 ```
 
 Fingerprint: `863320B6B89B26B2988B55883D8DC7AC7D242CF0`.

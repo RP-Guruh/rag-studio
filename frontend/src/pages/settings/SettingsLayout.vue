@@ -1,18 +1,20 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { isAdmin } from '../../services/auth'
 import { t } from '../../i18n'
 
 const route = useRoute()
 
-const navItems = [
+// Recomputed so a locale switch updates the navigation without a restart.
+const navItems = computed(() => [
   { name: t('settings.health'), path: '/settings/health' },
-  { name: 'Chat model', path: '/settings/chat' },
-  { name: 'Embedding model', path: '/settings/embedding' },
-  { name: 'Database', path: '/settings/database' },
-  { name: 'Document processing', path: '/settings/docling' },
+  { name: t('Chat model'), path: '/settings/chat' },
+  { name: t('Embedding model'), path: '/settings/embedding' },
+  { name: t('Database'), path: '/settings/database' },
+  { name: t('Document processing'), path: '/settings/docling' },
   { name: t('settings.users'), path: '/settings/users', adminOnly: true }
-]
+])
 </script>
 
 <template>
@@ -20,7 +22,7 @@ const navItems = [
     <header class="settings-header">
       <div class="header-titles">
         <h1 class="page-title">{{ t('settings.title') }}</h1>
-        <p class="page-description">Configure language models, embedding vectors, the vector database, and document processing.</p>
+        <p class="page-description">{{ t('Configure language models, embedding vectors, the vector database, and document processing.') }}</p>
       </div>
     </header>
 

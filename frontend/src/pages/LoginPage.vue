@@ -45,9 +45,9 @@ async function submit() {
         <div class="login-logo-wrap">
           <AppLogo :size="44" :animated="true" />
         </div>
-        <h1 class="login-title">{{ isRegister ? t('auth.register') : t('auth.signIn') }} — RAG Studio</h1>
+        <h1 class="login-title">{{ isRegister ? t('auth.register') : t('auth.signIn') }} — {{ t('RAG Studio') }}</h1>
         <p class="login-subtitle">
-          {{ isRegister ? 'The first account becomes the administrator.' : 'Vector Knowledge & Neural Retrieval' }}
+          {{ isRegister ? t('The first account becomes the administrator.') : t('Vector Knowledge & Neural Retrieval') }}
         </p>
       </div>
 
@@ -56,7 +56,7 @@ async function submit() {
       <form class="login-form" @submit.prevent="submit">
         <div class="divider-row">
           <span class="divider-line" />
-          <span class="divider-text">{{ isRegister ? 'or create the admin account' : 'or sign in with credentials' }}</span>
+          <span class="divider-text">{{ isRegister ? t('or create the admin account') : t('or sign in with credentials') }}</span>
           <span class="divider-line" />
         </div>
 
@@ -65,7 +65,7 @@ async function submit() {
             id="login-email"
             v-model="email"
             type="email"
-            placeholder="name@company.com"
+            :placeholder="t('name@company.com')"
             autocomplete="email"
           />
         </FormField>
@@ -75,7 +75,7 @@ async function submit() {
             id="login-password"
             v-model="password"
             type="password"
-            placeholder="Enter password"
+            :placeholder="t('Enter password')"
             autocomplete="current-password"
           />
         </FormField>
@@ -92,7 +92,7 @@ async function submit() {
           class="setup-link"
           @click="router.push('/settings/health')"
         >
-          Set up RAG Studio first (Docker, database, models)
+          {{ t('Set up RAG Studio first (Docker, database, models)') }}
         </button>
       </form>
     </div>

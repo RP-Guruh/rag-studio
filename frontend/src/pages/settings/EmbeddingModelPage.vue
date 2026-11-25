@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { t } from '../../i18n'
 import BaseButton from '../../components/BaseButton.vue'
 import FormField from '../../components/FormField.vue'
 import {
@@ -77,8 +78,8 @@ async function handleSave() {
 <template>
   <div class="settings-section">
     <div class="section-header">
-      <h2 class="section-title">Embedding model</h2>
-      <p class="section-desc">Vector embedding model used to vectorize and index text chunks.</p>
+      <h2 class="section-title">{{ t('Embedding model') }}</h2>
+      <p class="section-desc">{{ t('Vector embedding model used to vectorize and index text chunks.') }}</p>
     </div>
 
     <div class="warning-callout">
@@ -89,18 +90,18 @@ async function handleSave() {
       </svg>
       <div class="callout-content">
         <p class="callout-text">
-          Changing the embedding model or dimension later requires re-indexing every project's knowledge documents.
+          {{ t("Changing the embedding model or dimension later requires re-indexing every project's knowledge documents.") }}
         </p>
       </div>
     </div>
 
-    <div v-if="isLoading" class="state-note">Loading settings...</div>
+    <div v-if="isLoading" class="state-note">{{ t('Loading settings...') }}</div>
     <div v-else-if="loadError" class="feedback-banner feedback-banner--error" role="alert">
       {{ loadError }}
     </div>
 
     <form v-else class="settings-form" @submit.prevent="handleSave">
-      <FormField label="Provider" id="embed-provider">
+      <FormField :label="t('Provider')" id="embed-provider">
         <select id="embed-provider" v-model="form.provider">
           <option v-for="option in embeddingProviders" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -109,31 +110,31 @@ async function handleSave() {
       </FormField>
 
       <FormField
-        label="Base URL"
+        :label="t('Base URL')"
         id="embed-base-url"
-        hint="Embedding API service endpoint."
+        :hint="t('Embedding API service endpoint.')"
       >
         <input
           id="embed-base-url"
           v-model="form.baseUrl"
           type="text"
-          placeholder="https://api.openai.com/v1"
+          :placeholder="t('https://api.openai.com/v1')"
         />
       </FormField>
 
       <FormField
-        label="API key"
+        :label="t('API key')"
         id="embed-api-key"
         :hint="form.apiKeySet
-          ? `A key is stored (${form.apiKeyHint}). Leave blank to keep it.`
-          : 'Stored in the operating system keychain, not in the database.'"
+          ? t('A key is stored ({{hint}}). Leave blank to keep it.', { hint: form.apiKeyHint ?? '' })
+          : t('Stored in the operating system keychain, not in the database.')"
       >
         <div class="input-with-action">
           <input
             id="embed-api-key"
             v-model="form.apiKey"
             :type="showApiKey ? 'text' : 'password'"
-            :placeholder="form.apiKeySet ? form.apiKeyHint : 'sk-...'"
+            :placeholder="form.apiKeySet ? form.apiKeyHint : t('sk-...')"
             autocomplete="off"
           />
           <button
@@ -141,29 +142,29 @@ async function handleSave() {
             class="toggle-mask-btn"
             @click="showApiKey = !showApiKey"
           >
-            {{ showApiKey ? 'Hide' : 'Show' }}
+            {{ showApiKey ? t('Hide') : t('Show') }}
           </button>
         </div>
       </FormField>
 
       <div class="form-grid-2">
         <FormField
-          label="Model name"
+          :label="t('Model name')"
           id="embed-model-name"
-          hint="Model identifier."
+          :hint="t('Model identifier.')"
         >
           <input
             id="embed-model-name"
             v-model="form.modelName"
             type="text"
-            placeholder="text-embedding-3-small"
+            :placeholder="t('text-embedding-3-small')"
           />
         </FormField>
 
         <FormField
-          label="Vector dimension"
+          :label="t('Vector dimension')"
           id="embed-dimension"
-          hint="Output float array size (e.g. 768, 1536, 3072)."
+          :hint="t('Output float array size (e.g. 768, 1536, 3072).')"
         >
           <input
             id="embed-dimension"
@@ -178,9 +179,9 @@ async function handleSave() {
 
       <div class="form-grid-2">
         <FormField
-          label="Chunk max tokens"
+          :label="t('Chunk max tokens')"
           id="embed-chunk-max-tokens"
-          hint="Target token count per chunk produced by the document chunker."
+          :hint="t('Target token count per chunk produced by the document chunker.')"
         >
           <input
             id="embed-chunk-max-tokens"
@@ -193,15 +194,15 @@ async function handleSave() {
         </FormField>
 
         <FormField
-          label="Chunker tokenizer"
+          :label="t('Chunker tokenizer')"
           id="embed-tokenizer"
-          hint="Hugging Face tokenizer used to count tokens (e.g. BAAI/bge-m3)."
+          :hint="t('Hugging Face tokenizer used to count tokens (e.g. BAAI/bge-m3).')"
         >
           <input
             id="embed-tokenizer"
             v-model="form.tokenizer"
             type="text"
-            placeholder="BAAI/bge-m3"
+            :placeholder="t('BAAI/bge-m3')"
           />
         </FormField>
       </div>
@@ -226,14 +227,14 @@ async function handleSave() {
           :disabled="isTesting || isSaving"
           @click="handleTestConnection"
         >
-          {{ isTesting ? 'Testing...' : 'Test connection' }}
+          {{ isTesting ? t('Testing...') : t('Test connection') }}
         </BaseButton>
 
         <BaseButton variant="primary" type="submit" :disabled="isSaving">
-          {{ isSaving ? 'Saving...' : 'Save' }}
+          {{ isSaving ? t('Saving...') : t('common.save') }}
         </BaseButton>
 
-        <span v-if="saveSuccess" class="save-indicator">Settings saved.</span>
+        <span v-if="saveSuccess" class="save-indicator">{{ t('Settings saved.') }}</span>
       </div>
     </form>
   </div>

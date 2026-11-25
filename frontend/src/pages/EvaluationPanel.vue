@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { t } from '../i18n'
 import BaseButton from '../components/BaseButton.vue'
 import FormField from '../components/FormField.vue'
 import { renderMarkdown } from '../utils/markdown'
@@ -32,7 +33,7 @@ const sets = ref<EvalSet[]>([])
 const selectedSetId = ref('')
 const cases = ref<EvalCase[]>([])
 const report = ref<EvalReport | null>(null)
-const setName = ref('Knowledge check')
+const setName = ref(t('Knowledge check'))
 const question = ref('')
 const expectedAnswer = ref('')
 const expectedSource = ref('')
@@ -77,7 +78,7 @@ async function handleCreateSet() {
   if (props.readonly) return
   error.value = ''
   try {
-    const set = await createEvalSet(props.projectId, setName.value.trim() || 'Knowledge check')
+    const set = await createEvalSet(props.projectId, setName.value.trim() || t('Knowledge check'))
     await reload()
     selectedSetId.value = set.id
     await loadCases()
@@ -112,6 +113,15 @@ async function handleRun() {
     busy.value = false
   }
 }
+
+// Param-based summary; kept out of the template so "{{...}}" cannot close the mustache.
+const reportSummary = (report: EvalReport) =>
+  t('{{answerHit}}/{{total}} answers matched · {{sourceHit}}/{{total}} sources matched · {{answered}} answers returned', {
+    answerHit: report.answerHit,
+    sourceHit: report.sourceHit,
+    total: report.total,
+    answered: report.answered
+  })
 </script>
 
 <template>
@@ -120,88 +130,88 @@ async function handleRun() {
 
     <section class="eval-card">
       <header class="card-head">
-        <h3 class="card-title">Retrieval settings</h3>
-        <p class="card-hint">Atur bagaimana konteks diambil sebelum jawaban dibuat.</p>
+        <h3 class="card-title">{{ t('Retrieval settings') }}</h3>
+        <p class="card-hint">{{ t('Configure how context is retrieved before an answer is generated.') }}</p>
       </header>
 
       <div class="config-grid">
-        <FormField label="Top K" id="eval-topk" hint="Jumlah potongan konteks yang diambil.">
+        <FormField :label="t('Top K')" id="eval-topk" :hint="t('Number of context chunks to retrieve.')">
           <input id="eval-topk" v-model.number="config.topK" type="number" min="1" max="20" :disabled="readonly" />
         </FormField>
-        <FormField label="Minimum score" id="eval-minscore" hint="Ambang skor kemiripan.">
+        <FormField :label="t('Minimum score')" id="eval-minscore" :hint="t('Similarity score threshold.')">
           <input id="eval-minscore" v-model.number="config.minScore" type="number" min="0" max="1" step="0.05" :disabled="readonly" />
         </FormField>
-        <FormField label="Hybrid weight" id="eval-hybrid-weight" hint="Bobot pencarian hibrida.">
+        <FormField :label="t('Hybrid weight')" id="eval-hybrid-weight" :hint="t('Weight of hybrid search.')">
           <input id="eval-hybrid-weight" v-model.number="config.hybridWeight" type="number" min="0" max="1" step="0.05" :disabled="readonly" />
         </FormField>
-        <FormField label="Rerank weight" id="eval-rerank-weight" hint="Bobot peninjauan ulang.">
+        <FormField :label="t('Rerank weight')" id="eval-rerank-weight" :hint="t('Weight of reranking.')">
           <input id="eval-rerank-weight" v-model.number="config.rerankWeight" type="number" min="0" max="1" step="0.05" :disabled="readonly" />
         </FormField>
       </div>
 
       <div class="toggle-box">
-        <span class="toggle-title">Opsi pencarian</span>
+        <span class="toggle-title">{{ t('Search options') }}</span>
         <div class="config-toggles">
-          <label><input v-model="config.hybrid" type="checkbox" :disabled="readonly" /> Hybrid search</label>
-          <label><input v-model="config.rerank" type="checkbox" :disabled="readonly" /> Rerank results</label>
-          <label><input v-model="config.guardrails" type="checkbox" :disabled="readonly" /> Guardrails</label>
+          <label><input v-model="config.hybrid" type="checkbox" :disabled="readonly" /> {{ t('Hybrid search') }}</label>
+          <label><input v-model="config.rerank" type="checkbox" :disabled="readonly" /> {{ t('Rerank results') }}</label>
+          <label><input v-model="config.guardrails" type="checkbox" :disabled="readonly" /> {{ t('Guardrails') }}</label>
         </div>
       </div>
 
       <div class="card-actions">
         <BaseButton v-if="!readonly" variant="outline" size="sm" type="button" @click="saveConfig">
-          Save retrieval settings
+          {{ t('Save retrieval settings') }}
         </BaseButton>
       </div>
     </section>
 
     <section class="eval-card">
       <header class="card-head">
-        <h3 class="card-title">Evaluation sets</h3>
-        <p class="card-hint">Kumpulkan pertanyaan uji untuk mengukur kualitas jawaban.</p>
+        <h3 class="card-title">{{ t('Evaluation sets') }}</h3>
+        <p class="card-hint">{{ t('Collect test questions to measure answer quality.') }}</p>
       </header>
 
       <div class="set-create-row">
-        <FormField label="Set name" id="eval-set-name" hint="Nama set baru.">
+        <FormField :label="t('Set name')" id="eval-set-name" :hint="t('Name of the new set.')">
           <input id="eval-set-name" v-model="setName" type="text" :disabled="readonly" />
         </FormField>
         <BaseButton v-if="!readonly" variant="outline" size="sm" type="button" @click="handleCreateSet">
-          Create set
+          {{ t('Create set') }}
         </BaseButton>
       </div>
 
       <label class="stacked-label">
-        Active set
+        {{ t('Active set') }}
         <select v-model="selectedSetId" :disabled="readonly" @change="loadCases">
-          <option value="">Pilih set…</option>
+          <option value="">{{ t('Choose a set…') }}</option>
           <option v-for="set in sets" :key="set.id" :value="set.id">{{ set.name }}</option>
         </select>
       </label>
 
-      <p v-if="sets.length === 0" class="empty-note">Belum ada evaluation set. Buat set terlebih dahulu.</p>
+      <p v-if="sets.length === 0" class="empty-note">{{ t('No evaluation sets yet. Create one first.') }}</p>
     </section>
 
     <section v-if="selectedSetId" class="eval-card">
       <header class="card-head">
-        <h3 class="card-title">Test cases</h3>
-        <p class="card-hint">Tambahkan pertanyaan dan jawaban yang diharapkan.</p>
+        <h3 class="card-title">{{ t('Test cases') }}</h3>
+        <p class="card-hint">{{ t('Add questions and their expected answers.') }}</p>
       </header>
 
       <div class="case-form-grid">
-        <FormField label="Question" id="eval-question">
-          <input id="eval-question" v-model="question" type="text" placeholder="Question to ask the project" :disabled="readonly" />
+        <FormField :label="t('Question')" id="eval-question">
+          <input id="eval-question" v-model="question" type="text" :placeholder="t('Question to ask the project')" :disabled="readonly" />
         </FormField>
-        <FormField label="Expected answer (optional)" id="eval-expected-answer">
+        <FormField :label="t('Expected answer (optional)')" id="eval-expected-answer">
           <input id="eval-expected-answer" v-model="expectedAnswer" type="text" :disabled="readonly" />
         </FormField>
-        <FormField label="Expected source file (optional)" id="eval-expected-source">
-          <input id="eval-expected-source" v-model="expectedSource" type="text" placeholder="menu.pdf" :disabled="readonly" />
+        <FormField :label="t('Expected source file (optional)')" id="eval-expected-source">
+          <input id="eval-expected-source" v-model="expectedSource" type="text" :placeholder="t('menu.pdf')" :disabled="readonly" />
         </FormField>
       </div>
 
       <div class="card-actions">
         <BaseButton v-if="!readonly" variant="outline" size="sm" type="button" @click="handleAddCase">
-          Add case
+          {{ t('Add case') }}
         </BaseButton>
         <BaseButton
           v-if="!readonly"
@@ -211,11 +221,11 @@ async function handleRun() {
           :disabled="busy || cases.length === 0"
           @click="handleRun"
         >
-          {{ busy ? 'Running…' : 'Run evaluation' }}
+          {{ busy ? t('Running…') : t('Run evaluation') }}
         </BaseButton>
       </div>
 
-      <p v-if="cases.length === 0" class="empty-note">Belum ada test case pada set ini.</p>
+      <p v-if="cases.length === 0" class="empty-note">{{ t('No test cases in this set yet.') }}</p>
       <div v-else class="case-list">
         <div v-for="item in cases" :key="item.id" class="case-item">
           <span class="case-question">{{ item.question }}</span>
@@ -226,12 +236,8 @@ async function handleRun() {
 
     <section v-if="report" class="eval-card">
       <header class="card-head">
-        <h3 class="card-title">Result</h3>
-        <p class="card-hint">
-          {{ report.answerHit }}/{{ report.total }} jawaban cocok ·
-          {{ report.sourceHit }}/{{ report.total }} sumber cocok ·
-          {{ report.answered }} jawaban dikembalikan
-        </p>
+        <h3 class="card-title">{{ t('Result') }}</h3>
+        <p class="card-hint">{{ reportSummary(report) }}</p>
       </header>
 
       <div class="result-list">
@@ -240,12 +246,12 @@ async function handleRun() {
             <div class="result-question">{{ index + 1 }}. {{ result.question }}</div>
             <div class="result-flags">
               <span :class="result.answerMatched ? 'flag-ok' : 'flag-bad'">
-                {{ result.answerMatched ? 'answer OK' : 'answer unchecked' }}
+                {{ result.answerMatched ? t('answer OK') : t('answer unchecked') }}
               </span>
               <span :class="result.sourceMatched ? 'flag-ok' : 'flag-bad'">
-                {{ result.sourceMatched ? 'source OK' : 'source miss' }}
+                {{ result.sourceMatched ? t('source OK') : t('source miss') }}
               </span>
-              <span v-if="result.noEvidence" class="flag-bad">no evidence</span>
+              <span v-if="result.noEvidence" class="flag-bad">{{ t('no evidence') }}</span>
             </div>
           </header>
           <div class="result-answer markdown-body" v-html="renderMarkdown(result.answer)" />

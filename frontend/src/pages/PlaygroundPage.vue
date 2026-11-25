@@ -41,9 +41,9 @@ const personaSummary = computed(() => {
   const persona = activeProject.value?.persona
   if (!persona) return ''
   const language = !persona.answerLanguage || persona.answerLanguage === 'auto'
-    ? 'Auto'
+    ? t('Auto')
     : persona.answerLanguage
-  const grounding = persona.strictKnowledge ? 'strict' : 'general'
+  const grounding = persona.strictKnowledge ? t('strict') : t('general')
   return `${persona.name} · ${persona.tone} · ${language} · ${grounding}`
 })
 
@@ -94,7 +94,9 @@ function mapChunk(chunk: ChunkHit): RetrievedChunk {
     ? (metadata.captions as string[]).join(', ')
     : ''
   const parts = [
-    chunk.pageNumber > 0 ? `Page ${chunk.pageNumber}` : `Chunk ${chunk.chunkIndex}`,
+    chunk.pageNumber > 0
+      ? t('Page {{num}}', { num: chunk.pageNumber })
+      : t('Chunk {{num}}', { num: chunk.chunkIndex }),
     headings,
     captions
   ].filter(Boolean)
@@ -170,7 +172,7 @@ async function handleSendMessage() {
   } catch (err) {
     sendError.value = err instanceof Error ? err.message : String(err)
     if (placeholder) {
-      placeholder.content = placeholder.content || `Could not answer: ${sendError.value}`
+      placeholder.content = placeholder.content || t('Could not answer: {{message}}', { message: sendError.value })
     }
   } finally {
     unsubscribe()
@@ -183,6 +185,9 @@ async function handleSendMessage() {
 function toggleSidePanel() {
   isSidePanelOpen.value = !isSidePanelOpen.value
 }
+
+// Param-based label used in a text node; keep "{{...}}" out of the mustache.
+const thinkingLabel = (name: string) => t('{{name}} is thinking…', { name })
 </script>
 
 <template>
@@ -190,7 +195,7 @@ function toggleSidePanel() {
     <!-- Top Control Bar -->
     <header class="playground-header">
       <div class="project-selector-group">
-        <label for="project-select" class="selector-label">Project</label>
+        <label for="project-select" class="selector-label">{{ t('Project') }}</label>
         <select
           id="project-select"
           v-model="selectedProjectId"
@@ -223,7 +228,7 @@ function toggleSidePanel() {
           type="button"
           @click="toggleSidePanel"
         >
-          {{ isSidePanelOpen ? 'Hide chunks' : 'Show chunks' }}
+          {{ isSidePanelOpen ? t('Hide chunks') : t('Show chunks') }}
         </BaseButton>
 
         <BaseButton
@@ -233,7 +238,7 @@ function toggleSidePanel() {
           :disabled="currentMessages.length === 0"
           @click="handleClearChat"
         >
-          Clear chat
+          {{ t('Clear chat') }}
         </BaseButton>
       </div>
     </header>
@@ -253,7 +258,7 @@ function toggleSidePanel() {
               <div class="message-bubble">
                 <div class="message-meta">
                   <span class="message-author">
-                    {{ msg.role === 'user' ? 'You' : (activeProject?.personaName || 'Assistant') }}
+                    {{ msg.role === 'user' ? t('You') : (activeProject?.personaName || t('Assistant')) }}
                   </span>
                   <span class="message-time">{{ msg.timestamp }}</span>
                 </div>
@@ -268,13 +273,13 @@ function toggleSidePanel() {
                   role="status"
                 >
                   <span class="thinking-dots" aria-hidden="true"><i /><i /><i /></span>
-                  <span>{{ activeProject?.personaName || 'Assistant' }} sedang berpikir…</span>
+                  <span>{{ thinkingLabel(activeProject?.personaName || t('Assistant')) }}</span>
                 </div>
                 <div v-else class="message-body">
                   {{ msg.content }}
                 </div>
                 <div v-if="msg.sources && msg.sources.length > 0" class="message-sources">
-                  <span class="sources-label">Sources:</span>
+                  <span class="sources-label">{{ t('Sources:') }}</span>
                   <span class="sources-files">{{ msg.sources.join(', ') }}</span>
                 </div>
               </div>
@@ -284,8 +289,8 @@ function toggleSidePanel() {
           <!-- Empty State -->
           <EmptyState
             v-else
-            title="Playground is empty"
-            description="Train a project's knowledge base, then ask a question below to test its answer."
+            :title="t('Playground is empty')"
+            :description="t('Train a project\'s knowledge base, then ask a question below to test its answer.')"
           />
 
         </div>
@@ -303,7 +308,7 @@ function toggleSidePanel() {
               v-model="inputQuery"
               type="text"
               class="chat-input"
-              placeholder="Ask a question about the project's knowledge documents..."
+              :placeholder="t('Ask a question about the project\'s knowledge documents...')"
             />
             <BaseButton
               variant="primary"
@@ -319,7 +324,7 @@ function toggleSidePanel() {
       <!-- Right Collapsible Panel: Retrieved Chunks -->
       <aside v-if="isSidePanelOpen" class="chunks-panel">
         <div class="chunks-header">
-          <h2 class="chunks-title">Retrieved chunks</h2>
+          <h2 class="chunks-title">{{ t('Retrieved chunks') }}</h2>
           <span class="chunks-count font-mono">{{ currentChunks.length }}</span>
         </div>
 
@@ -340,13 +345,13 @@ function toggleSidePanel() {
             </article>
           </div>
           <div v-else class="chunks-empty">
-            <p>No chunks retrieved for this session yet.</p>
+            <p>{{ t('No chunks retrieved for this session yet.') }}</p>
           </div>
 
           <div v-if="debugInfo" class="debug-panel">
-            <h3 class="debug-title">Last request</h3>
+            <h3 class="debug-title">{{ t('Last request') }}</h3>
             <p class="debug-meta">
-              {{ debugInfo.latencyMs }} ms · top K {{ debugInfo.topK }}
+              {{ debugInfo.latencyMs }} ms · {{ t('Top K') }} {{ debugInfo.topK }}
             </p>
             <pre class="debug-prompt">{{ debugInfo.systemPrompt }}</pre>
           </div>

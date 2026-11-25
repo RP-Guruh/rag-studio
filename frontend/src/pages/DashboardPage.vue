@@ -50,7 +50,7 @@ function openNewProjectDialog() {
 
 async function handleCreateProject() {
   if (!projectName.value.trim()) {
-    nameError.value = 'Project name is required.'
+    nameError.value = t('Project name is required.')
     return
   }
   isSubmitting.value = true
@@ -59,7 +59,7 @@ async function handleCreateProject() {
     isDialogOpen.value = false
     router.push(`/projects/${created.id}`)
   } catch (err: any) {
-    nameError.value = err?.message || 'Failed to create project.'
+    nameError.value = err?.message || t('Failed to create project.')
   } finally {
     isSubmitting.value = false
   }
@@ -76,7 +76,7 @@ function openEditProjectDialog(event: Event, project: Project) {
 
 async function handleUpdateProject() {
   if (!projectName.value.trim()) {
-    nameError.value = 'Project name is required.'
+    nameError.value = t('Project name is required.')
     return
   }
   isSubmitting.value = true
@@ -84,7 +84,7 @@ async function handleUpdateProject() {
     await updateProject(editingProjectId.value, projectName.value.trim(), projectDescription.value.trim())
     isEditDialogOpen.value = false
   } catch (err: any) {
-    nameError.value = err?.message || 'Failed to update project.'
+    nameError.value = err?.message || t('Failed to update project.')
   } finally {
     isSubmitting.value = false
   }
@@ -102,7 +102,7 @@ async function confirmDeleteProject() {
   try {
     await deleteProject(projectToDelete.value)
   } catch (err: any) {
-    alert(err?.message || 'Failed to delete project.')
+    alert(err?.message || t('Failed to delete project.'))
   } finally {
     projectToDelete.value = ''
   }
@@ -112,6 +112,9 @@ function navigateToProject(id: string) {
   router.push(`/projects/${id}`)
 }
 
+// Kept out of the template: literal "{{...}}" inside a mustache would end it early.
+const fileCountLabel = (count: number) => t('{{count}} files', { count })
+
 </script>
 
 <template>
@@ -120,27 +123,27 @@ function navigateToProject(id: string) {
     <header class="page-header">
       <div class="header-titles">
         <h1 class="page-title">{{ t('dashboard.title') }}</h1>
-        <p class="page-description">Manage RAG knowledge bases, retrieval settings, and personas.</p>
+        <p class="page-description">{{ t('Manage RAG knowledge bases, retrieval settings, and personas.') }}</p>
       </div>
       <div class="header-actions">
-        <BaseButton v-if="isAdmin" variant="primary" @click="openNewProjectDialog">New project</BaseButton>
+        <BaseButton v-if="isAdmin" variant="primary" @click="openNewProjectDialog">{{ t('dashboard.new') }}</BaseButton>
       </div>
     </header>
 
     <!-- Content Area -->
     <div class="page-content">
       <div v-if="isLoading" class="loading-state">
-        Loading projects...
+        {{ t('Loading projects...') }}
       </div>
       <div v-else-if="mockStore.projects.length > 0" class="projects-table-card">
         <table class="projects-table">
           <thead>
             <tr>
-              <th scope="col" class="th-main">Project</th>
-              <th scope="col">Knowledge files</th>
-              <th scope="col" class="col-optional">Persona</th>
-              <th scope="col" class="col-optional">Last updated</th>
-              <th scope="col" class="th-action"><span class="sr-only">Actions</span></th>
+              <th scope="col" class="th-main">{{ t('Project') }}</th>
+              <th scope="col">{{ t('Knowledge files') }}</th>
+              <th scope="col" class="col-optional">{{ t('Persona') }}</th>
+              <th scope="col" class="col-optional">{{ t('Last updated') }}</th>
+              <th scope="col" class="th-action"><span class="sr-only">{{ t('Actions') }}</span></th>
             </tr>
           </thead>
           <tbody>
@@ -153,11 +156,11 @@ function navigateToProject(id: string) {
               <td class="td-main">
                 <div class="project-info">
                   <span class="project-name">{{ project.name }}</span>
-                  <span class="project-desc">{{ project.description || 'No description provided.' }}</span>
+                  <span class="project-desc">{{ project.description || t('No description provided.') }}</span>
                 </div>
               </td>
               <td>
-                <span class="badge-count">{{ project.knowledgeFilesCount }} files</span>
+                <span class="badge-count">{{ fileCountLabel(project.knowledgeFilesCount) }}</span>
               </td>
               <td class="col-optional">
                 <span class="persona-name">{{ project.personaName }}</span>
@@ -170,7 +173,7 @@ function navigateToProject(id: string) {
                   <button
                     type="button"
                     class="action-icon-btn"
-                    title="Edit project"
+                    :title="t('Edit project')"
                     @click="openEditProjectDialog($event, project)"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -181,7 +184,7 @@ function navigateToProject(id: string) {
                   <button
                     type="button"
                     class="action-icon-btn action-icon-btn--danger"
-                    title="Delete project"
+                    :title="t('Delete project')"
                     @click="promptDeleteProject($event, project.id)"
                   >
                     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -199,54 +202,54 @@ function navigateToProject(id: string) {
       <!-- Empty State -->
       <EmptyState
         v-else
-        title="No projects yet"
-        description="No projects are visible yet. Projects assigned to your account will appear here."
+        :title="t('No projects yet')"
+        :description="t('No projects are visible yet. Projects assigned to your account will appear here.')"
       />
     </div>
 
     <!-- New Project Dialog -->
     <BaseDialog
       :open="isDialogOpen"
-      title="Create new project"
+      :title="t('Create new project')"
       @close="isDialogOpen = false"
     >
       <form id="new-project-form" @submit.prevent="handleCreateProject">
         <FormField
-          label="Project name"
+          :label="t('Project name')"
           id="project-name"
           required
           :error="nameError"
           @input="formatInput"
-          hint="A clear identifier for this retrieval workspace."
+          :hint="t('A clear identifier for this retrieval workspace.')"
         >
           <input
             id="project-name"
             v-model="projectName"
             type="text"
-            placeholder="e.g. Legal_Contracts_Assistant"
+            :placeholder="t('e.g. Legal_Contracts_Assistant')"
             autofocus
           />
         </FormField>
 
         <FormField
-          label="Description"
+          :label="t('Description')"
           id="project-desc"
-          hint="Optional summary of the knowledge domain or purpose."
+          :hint="t('Optional summary of the knowledge domain or purpose.')"
         >
           <textarea
             id="project-desc"
             v-model="projectDescription"
-            placeholder="Describe what documents will be indexed and who uses this..."
+            :placeholder="t('Describe what documents will be indexed and who uses this...')"
           />
         </FormField>
       </form>
 
       <template #footer>
         <BaseButton variant="outline" type="button" :disabled="isSubmitting" @click="isDialogOpen = false">
-          Cancel
+          {{ t('common.cancel') }}
         </BaseButton>
         <BaseButton variant="primary" type="submit" form="new-project-form" :disabled="isSubmitting">
-          {{ isSubmitting ? 'Creating...' : 'Create project' }}
+          {{ isSubmitting ? t('Creating...') : t('Create project') }}
         </BaseButton>
       </template>
     </BaseDialog>
@@ -254,46 +257,46 @@ function navigateToProject(id: string) {
     <!-- Edit Project Dialog -->
     <BaseDialog
       :open="isEditDialogOpen"
-      title="Edit project"
+      :title="t('Edit project')"
       @close="isEditDialogOpen = false"
     >
       <form id="edit-project-form" @submit.prevent="handleUpdateProject">
         <FormField
-          label="Project name"
+          :label="t('Project name')"
           id="edit-project-name"
           required
           :error="nameError"
           @input="formatInput"
-          hint="A clear identifier for this retrieval workspace."
+          :hint="t('A clear identifier for this retrieval workspace.')"
         >
           <input
             id="edit-project-name"
             v-model="projectName"
             type="text"
-            placeholder="e.g. Legal_Contracts_Assistant"
+            :placeholder="t('e.g. Legal_Contracts_Assistant')"
             autofocus
           />
         </FormField>
 
         <FormField
-          label="Description"
+          :label="t('Description')"
           id="edit-project-desc"
-          hint="Optional summary of the knowledge domain or purpose."
+          :hint="t('Optional summary of the knowledge domain or purpose.')"
         >
           <textarea
             id="edit-project-desc"
             v-model="projectDescription"
-            placeholder="Describe what documents will be indexed and who uses this..."
+            :placeholder="t('Describe what documents will be indexed and who uses this...')"
           />
         </FormField>
       </form>
 
       <template #footer>
         <BaseButton variant="outline" type="button" :disabled="isSubmitting" @click="isEditDialogOpen = false">
-          Cancel
+          {{ t('common.cancel') }}
         </BaseButton>
         <BaseButton variant="primary" type="submit" form="edit-project-form" :disabled="isSubmitting">
-          {{ isSubmitting ? 'Saving...' : 'Save changes' }}
+          {{ isSubmitting ? t('Saving...') : t('Save changes') }}
         </BaseButton>
       </template>
     </BaseDialog>
@@ -301,10 +304,10 @@ function navigateToProject(id: string) {
     <!-- Confirm Delete Modal -->
     <ConfirmModal
       :open="isConfirmDeleteOpen"
-      title="Delete Project"
-      message="Are you sure you want to delete this project? All associated documents and embeddings will be permanently removed."
-      confirm-text="Delete project"
-      cancel-text="Cancel"
+      :title="t('Delete Project')"
+      :message="t('Are you sure you want to delete this project? All associated documents and embeddings will be permanently removed.')"
+      :confirm-text="t('Delete project')"
+      :cancel-text="t('common.cancel')"
       variant="danger"
       @confirm="confirmDeleteProject"
       @cancel="isConfirmDeleteOpen = false"

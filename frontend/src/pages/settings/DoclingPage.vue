@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { t } from '../../i18n'
 import BaseButton from '../../components/BaseButton.vue'
 import FormField from '../../components/FormField.vue'
 import {
@@ -79,8 +80,8 @@ async function handleSave() {
 <template>
   <div class="settings-section">
     <div class="section-header">
-      <h2 class="section-title">Document processing</h2>
-      <p class="section-desc">Docling converts uploaded PDF, Word, Markdown and text files into parsed documents before they are indexed.</p>
+      <h2 class="section-title">{{ t('Document processing') }}</h2>
+      <p class="section-desc">{{ t('Docling converts uploaded PDF, Word, Markdown and text files into parsed documents before they are indexed.') }}</p>
     </div>
 
     <div class="info-callout">
@@ -91,21 +92,21 @@ async function handleSave() {
       </svg>
       <div class="callout-content">
         <p class="callout-text">
-          Docling runs as an HTTP service. Use <strong>Local</strong> when it runs on this computer (for example <code class="font-mono">http://localhost:5001</code>), and <strong>Serve</strong> when it runs on another machine.
+          {{ t('Docling runs as an HTTP service. Use') }} <strong>{{ t('Local') }}</strong> {{ t('when it runs on this computer (for example') }} <code class="font-mono">http://localhost:5001</code> {{ t('), and') }} <strong>{{ t('Serve') }}</strong> {{ t('when it runs on another machine.') }}
         </p>
       </div>
     </div>
 
-    <div v-if="isLoading" class="state-note">Loading settings...</div>
+    <div v-if="isLoading" class="state-note">{{ t('Loading settings...') }}</div>
     <div v-else-if="loadError" class="feedback-banner feedback-banner--error" role="alert">
       {{ loadError }}
     </div>
 
     <form v-else class="settings-form" @submit.prevent="handleSave">
       <FormField
-        label="Mode"
+        :label="t('Mode')"
         id="docling-mode"
-        hint="Local means the service runs on this computer; Serve means it runs on another machine."
+        :hint="t('Local means the service runs on this computer; Serve means it runs on another machine.')"
       >
         <select id="docling-mode" v-model="form.mode">
           <option v-for="mode in doclingModes" :key="mode.value" :value="mode.value">
@@ -115,34 +116,34 @@ async function handleSave() {
       </FormField>
 
       <FormField
-        label="Base URL"
+        :label="t('Base URL')"
         id="docling-base-url"
         :hint="isLocal
-          ? 'Address of the Docling service on this computer, for example http://localhost:5001.'
-          : 'Address of the Docling service on the other machine, for example http://docling.internal:5001.'"
+          ? t('Address of the Docling service on this computer, for example http://localhost:5001.')
+          : t('Address of the Docling service on the other machine, for example http://docling.internal:5001.')"
       >
         <input
           id="docling-base-url"
           v-model="form.baseUrl"
           type="url"
-          placeholder="http://localhost:5001"
+          :placeholder="t('http://localhost:5001')"
         />
       </FormField>
 
       <div class="form-grid-2">
         <FormField
-          label="API key"
+          :label="t('API key')"
           id="docling-api-key"
           :hint="form.apiKeySet
-            ? `A key is stored (${form.apiKeyHint}). Leave blank to keep it.`
-            : 'Optional. Only needed when the server requires authentication.'"
+            ? t('A key is stored ({{hint}}). Leave blank to keep it.', { hint: form.apiKeyHint ?? '' })
+            : t('Optional. Only needed when the server requires authentication.')"
         >
           <div class="input-with-action">
             <input
               id="docling-api-key"
               v-model="form.apiKey"
               :type="showApiKey ? 'text' : 'password'"
-              :placeholder="form.apiKeySet ? form.apiKeyHint : 'Optional'"
+              :placeholder="form.apiKeySet ? form.apiKeyHint : t('Optional')"
               autocomplete="off"
             />
             <button
@@ -150,15 +151,15 @@ async function handleSave() {
               class="toggle-mask-btn"
               @click="showApiKey = !showApiKey"
             >
-              {{ showApiKey ? 'Hide' : 'Show' }}
+              {{ showApiKey ? t('Hide') : t('Show') }}
             </button>
           </div>
         </FormField>
 
         <FormField
-          label="Timeout (seconds)"
+          :label="t('Timeout (seconds)')"
           id="docling-timeout"
-          hint="How long a single document may take. Large scans can take several minutes."
+          :hint="t('How long a single document may take. Large scans can take several minutes.')"
         >
           <input
             id="docling-timeout"
@@ -192,14 +193,14 @@ async function handleSave() {
           :disabled="isTesting || isSaving"
           @click="handleTestConnection"
         >
-          {{ isTesting ? 'Testing...' : 'Test connection' }}
+          {{ isTesting ? t('Testing...') : t('Test connection') }}
         </BaseButton>
 
         <BaseButton variant="primary" type="submit" :disabled="isSaving">
-          {{ isSaving ? 'Saving...' : 'Save' }}
+          {{ isSaving ? t('Saving...') : t('common.save') }}
         </BaseButton>
 
-        <span v-if="saveSuccess" class="save-indicator">Settings saved.</span>
+        <span v-if="saveSuccess" class="save-indicator">{{ t('Settings saved.') }}</span>
       </div>
     </form>
   </div>

@@ -16,7 +16,7 @@ const displayName = computed(() => {
 })
 const roleLabel = computed(() => {
   const role = currentUser.value?.role
-  return role === 'admin' ? 'Administrator' : role === 'user' ? 'Member' : ''
+  return role === 'admin' ? t('Administrator') : role === 'user' ? t('Member') : ''
 })
 const isSidebarOpen = ref(false)
 
@@ -54,7 +54,7 @@ async function handleSignOut() {
     <button
       type="button"
       class="mobile-nav-toggle"
-      aria-label="Open navigation"
+      :aria-label="t('Open navigation')"
       @click="isSidebarOpen = !isSidebarOpen"
     >
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
@@ -74,7 +74,7 @@ async function handleSignOut() {
       <div class="sidebar-header">
         <div class="brand">
           <AppLogo :size="24" />
-          <span class="brand-title">RAG Studio</span>
+          <span class="brand-title">{{ t('RAG Studio') }}</span>
         </div>
       </div>
 
@@ -100,13 +100,13 @@ async function handleSignOut() {
           class="theme-toggle-btn locale-toggle-btn"
           @click="setLocale(locale === 'en' ? 'id' : 'en')"
         >
-          <span>{{ locale === 'en' ? 'Bahasa Indonesia' : 'English' }}</span>
+          <span>{{ locale === 'en' ? t('Bahasa Indonesia') : t('English') }}</span>
         </button>
         <button
           type="button"
           class="theme-toggle-btn"
-          :aria-label="isDark ? 'Switch to light theme' : 'Switch to dark theme'"
-          :title="isDark ? 'Switch to light theme' : 'Switch to dark theme'"
+          :aria-label="isDark ? t('Switch to light theme') : t('Switch to dark theme')"
+          :title="isDark ? t('Switch to light theme') : t('Switch to dark theme')"
           @click="toggleTheme"
         >
           <svg v-if="isDark" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -123,7 +123,7 @@ async function handleSignOut() {
           <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
           </svg>
-          <span>{{ isDark ? 'Light mode' : 'Dark mode' }}</span>
+          <span>{{ isDark ? t('Light mode') : t('Dark mode') }}</span>
         </button>
 
         <div class="user-row">
@@ -139,8 +139,8 @@ async function handleSignOut() {
           <button
             type="button"
             class="signout-btn"
-            aria-label="Sign out"
-            title="Sign out"
+            :aria-label="t('Sign out')"
+            :title="t('Sign out')"
             @click="handleSignOut"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

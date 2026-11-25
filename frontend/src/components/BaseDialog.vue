@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { t } from '../i18n'
 
 interface Props {
   open: boolean
@@ -80,7 +81,7 @@ onBeforeUnmount(() => {
           <button
             type="button"
             class="dialog-close-btn"
-            aria-label="Close dialog"
+            :aria-label="t('Close dialog')"
             @click="$emit('close')"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

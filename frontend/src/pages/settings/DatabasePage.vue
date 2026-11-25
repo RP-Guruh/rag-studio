@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { t } from '../../i18n'
 import BaseButton from '../../components/BaseButton.vue'
 import FormField from '../../components/FormField.vue'
 import ConfirmModal from '../../components/ConfirmModal.vue'
@@ -101,8 +102,8 @@ async function executeSave() {
 <template>
   <div class="settings-section">
     <div class="section-header">
-      <h2 class="section-title">Database</h2>
-      <p class="section-desc">PostgreSQL instance hosting vector embeddings and metadata tables.</p>
+      <h2 class="section-title">{{ t('Database') }}</h2>
+      <p class="section-desc">{{ t('PostgreSQL instance hosting vector embeddings and metadata tables.') }}</p>
     </div>
 
     <div class="info-callout">
@@ -113,73 +114,73 @@ async function executeSave() {
       </svg>
       <div class="callout-content">
         <p class="callout-text">
-          The connected PostgreSQL database must have the <code class="font-mono">pgvector</code> extension enabled (<code class="font-mono">CREATE EXTENSION IF NOT EXISTS vector;</code>).
+          {{ t('The connected PostgreSQL database must have the') }} <code class="font-mono">pgvector</code> {{ t('extension enabled (') }}<code class="font-mono">CREATE EXTENSION IF NOT EXISTS vector;</code>{{ t(').') }}
         </p>
       </div>
     </div>
 
-    <div v-if="isLoading" class="state-note">Loading settings...</div>
+    <div v-if="isLoading" class="state-note">{{ t('Loading settings...') }}</div>
     <div v-else-if="loadError" class="feedback-banner feedback-banner--error" role="alert">
       {{ loadError }}
     </div>
 
     <form v-else class="settings-form" @submit.prevent="promptSave">
       <div class="form-grid-2">
-        <FormField label="Host" id="db-host" hint="IP address or domain.">
+        <FormField :label="t('Host')" id="db-host" :hint="t('IP address or domain.')">
           <input
             id="db-host"
             v-model="form.host"
             type="text"
-            placeholder="localhost"
+            :placeholder="t('localhost')"
           />
         </FormField>
 
-        <FormField label="Port" id="db-port" hint="Default: 5432.">
+        <FormField :label="t('Port')" id="db-port" :hint="t('Default: 5432.')">
           <input
             id="db-port"
             v-model.number="form.port"
             type="number"
             min="1"
             max="65535"
-            placeholder="5432"
+            :placeholder="t('5432')"
           />
         </FormField>
       </div>
 
       <div class="form-grid-2">
-        <FormField label="Database name" id="db-name">
+        <FormField :label="t('Database name')" id="db-name">
           <input
             id="db-name"
             v-model="form.databaseName"
             type="text"
-            placeholder="rag_db"
+            :placeholder="t('rag_db')"
           />
         </FormField>
 
-        <FormField label="Username" id="db-user">
+        <FormField :label="t('Username')" id="db-user">
           <input
             id="db-user"
             v-model="form.username"
             type="text"
-            placeholder="postgres"
+            :placeholder="t('postgres')"
           />
         </FormField>
       </div>
 
       <div class="form-grid-2">
         <FormField
-          label="Password"
+          :label="t('auth.password')"
           id="db-password"
           :hint="form.passwordSet
-            ? `A password is stored (${form.passwordHint}). Leave blank to keep it.`
-            : 'Stored in the operating system keychain, not in the database.'"
+            ? t('A password is stored ({{hint}}). Leave blank to keep it.', { hint: form.passwordHint ?? '' })
+            : t('Stored in the operating system keychain, not in the database.')"
         >
           <div class="input-with-action">
             <input
               id="db-password"
               v-model="form.password"
               :type="showPassword ? 'text' : 'password'"
-              :placeholder="form.passwordSet ? form.passwordHint : 'Database password'"
+              :placeholder="form.passwordSet ? form.passwordHint : t('Database password')"
               autocomplete="off"
             />
             <button
@@ -187,12 +188,12 @@ async function executeSave() {
               class="toggle-mask-btn"
               @click="showPassword = !showPassword"
             >
-              {{ showPassword ? 'Hide' : 'Show' }}
+              {{ showPassword ? t('Hide') : t('Show') }}
             </button>
           </div>
         </FormField>
 
-        <FormField label="SSL mode" id="db-ssl">
+        <FormField :label="t('SSL mode')" id="db-ssl">
           <select id="db-ssl" v-model="form.sslMode">
             <option v-for="mode in sslModes" :key="mode" :value="mode">{{ mode }}</option>
           </select>
@@ -200,15 +201,15 @@ async function executeSave() {
       </div>
 
       <FormField
-        label="Schema"
+        :label="t('Schema')"
         id="db-schema"
-        hint="Schema that holds the pgvector tables."
+        :hint="t('Schema that holds the pgvector tables.')"
       >
         <input
           id="db-schema"
           v-model="form.schemaName"
           type="text"
-          placeholder="public"
+          :placeholder="t('public')"
         />
       </FormField>
 
@@ -232,29 +233,27 @@ async function executeSave() {
           :disabled="isTesting || isSaving"
           @click="handleTestConnection"
         >
-          {{ isTesting ? 'Testing...' : 'Test connection' }}
+          {{ isTesting ? t('Testing...') : t('Test connection') }}
         </BaseButton>
 
         <BaseButton variant="primary" type="submit" :disabled="isSaving">
-          {{ isSaving ? 'Saving...' : 'Save' }}
+          {{ isSaving ? t('Saving...') : t('common.save') }}
         </BaseButton>
 
         <BaseButton variant="ghost" type="button" @click="handleBackup">
-          Backup settings
+          {{ t('Backup settings') }}
         </BaseButton>
 
-        <span v-if="saveSuccess" class="save-indicator">Settings saved.</span>
+        <span v-if="saveSuccess" class="save-indicator">{{ t('Settings saved.') }}</span>
       </div>
     </form>
 
     <ConfirmModal
       :open="isConfirmOpen"
-      title="Save Database Settings"
-      message="Are you sure you want to save these database settings?
-
-This action will also execute PostgreSQL migrations to create the required RAG schema tables (projects, project_personas, documents, chunks) if they do not exist yet."
-      confirm-text="Save & Migrate"
-      cancel-text="Cancel"
+      :title="t('Save Database Settings')"
+      :message="t('Are you sure you want to save these database settings?\n\nThis action will also execute PostgreSQL migrations to create the required RAG schema tables (projects, project_personas, documents, chunks) if they do not exist yet.')"
+      :confirm-text="t('Save & Migrate')"
+      :cancel-text="t('common.cancel')"
       variant="primary"
       @confirm="executeSave"
       @cancel="isConfirmOpen = false"

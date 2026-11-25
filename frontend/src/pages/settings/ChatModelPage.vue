@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { t } from '../../i18n'
 import BaseButton from '../../components/BaseButton.vue'
 import FormField from '../../components/FormField.vue'
 import {
@@ -77,17 +78,17 @@ async function handleSave() {
 <template>
   <div class="settings-section">
     <div class="section-header">
-      <h2 class="section-title">Chat model</h2>
-      <p class="section-desc">Configure the primary LLM used to synthesize RAG answers.</p>
+      <h2 class="section-title">{{ t('Chat model') }}</h2>
+      <p class="section-desc">{{ t('Configure the primary LLM used to synthesize RAG answers.') }}</p>
     </div>
 
-    <div v-if="isLoading" class="state-note">Loading settings...</div>
+    <div v-if="isLoading" class="state-note">{{ t('Loading settings...') }}</div>
     <div v-else-if="loadError" class="feedback-banner feedback-banner--error" role="alert">
       {{ loadError }}
     </div>
 
     <form v-else class="settings-form" @submit.prevent="handleSave">
-      <FormField label="Provider" id="chat-provider">
+      <FormField :label="t('Provider')" id="chat-provider">
         <select id="chat-provider" v-model="form.provider">
           <option v-for="option in chatProviders" :key="option.value" :value="option.value">
             {{ option.label }}
@@ -96,31 +97,31 @@ async function handleSave() {
       </FormField>
 
       <FormField
-        label="Base URL"
+        :label="t('Base URL')"
         id="chat-base-url"
-        hint="Root endpoint of the LLM API service."
+        :hint="t('Root endpoint of the LLM API service.')"
       >
         <input
           id="chat-base-url"
           v-model="form.baseUrl"
           type="text"
-          placeholder="https://api.openai.com/v1"
+          :placeholder="t('https://api.openai.com/v1')"
         />
       </FormField>
 
       <FormField
-        label="API key"
+        :label="t('API key')"
         id="chat-api-key"
         :hint="form.apiKeySet
-          ? `A key is stored (${form.apiKeyHint}). Leave blank to keep it.`
-          : 'Stored in the operating system keychain, not in the database.'"
+          ? t('A key is stored ({{hint}}). Leave blank to keep it.', { hint: form.apiKeyHint ?? '' })
+          : t('Stored in the operating system keychain, not in the database.')"
       >
         <div class="input-with-action">
           <input
             id="chat-api-key"
             v-model="form.apiKey"
             :type="showApiKey ? 'text' : 'password'"
-            :placeholder="form.apiKeySet ? form.apiKeyHint : 'sk-...'"
+            :placeholder="form.apiKeySet ? form.apiKeyHint : t('sk-...')"
             autocomplete="off"
           />
           <button
@@ -128,29 +129,29 @@ async function handleSave() {
             class="toggle-mask-btn"
             @click="showApiKey = !showApiKey"
           >
-            {{ showApiKey ? 'Hide' : 'Show' }}
+            {{ showApiKey ? t('Hide') : t('Show') }}
           </button>
         </div>
       </FormField>
 
       <FormField
-        label="Model name"
+        :label="t('Model name')"
         id="chat-model-name"
-        hint="Exact identifier expected by the provider API."
+        :hint="t('Exact identifier expected by the provider API.')"
       >
         <input
           id="chat-model-name"
           v-model="form.modelName"
           type="text"
-          placeholder="e.g. gpt-4o, claude-3-5-sonnet, llama3"
+          :placeholder="t('e.g. gpt-4o, claude-3-5-sonnet, llama3')"
         />
       </FormField>
 
       <div class="form-grid-2">
         <FormField
-          label="Temperature"
+          :label="t('Temperature')"
           id="chat-temperature"
-          hint="Sampling randomness (0.0 - 2.0)."
+          :hint="t('Sampling randomness (0.0 - 2.0).')"
         >
           <input
             id="chat-temperature"
@@ -163,9 +164,9 @@ async function handleSave() {
         </FormField>
 
         <FormField
-          label="Max output tokens"
+          :label="t('Max output tokens')"
           id="chat-max-tokens"
-          hint="Upper limit of response length."
+          :hint="t('Upper limit of response length.')"
         >
           <input
             id="chat-max-tokens"
@@ -198,14 +199,14 @@ async function handleSave() {
           :disabled="isTesting || isSaving"
           @click="handleTestConnection"
         >
-          {{ isTesting ? 'Testing...' : 'Test connection' }}
+          {{ isTesting ? t('Testing...') : t('Test connection') }}
         </BaseButton>
 
         <BaseButton variant="primary" type="submit" :disabled="isSaving">
-          {{ isSaving ? 'Saving...' : 'Save' }}
+          {{ isSaving ? t('Saving...') : t('common.save') }}
         </BaseButton>
 
-        <span v-if="saveSuccess" class="save-indicator">Settings saved.</span>
+        <span v-if="saveSuccess" class="save-indicator">{{ t('Settings saved.') }}</span>
       </div>
     </form>
   </div>

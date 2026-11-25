@@ -36,7 +36,6 @@ export function AskProjectStream(projectID: string, question: string): $Cancella
     return $Call.ByID(185840115, projectID, question);
 }
 
-
 /**
  * CancelChat stops an in-flight streaming answer for a project.
  */
@@ -73,7 +72,6 @@ export function DeleteProject(id: string): $CancellablePromise<void> {
     return $Call.ByID(4234103539, id);
 }
 
-
 export function GetProject(id: string): $CancellablePromise<projects$0.Project | null> {
     return $Call.ByID(1253198044, id);
 }
@@ -101,7 +99,6 @@ export function ImportDocuments(projectId: string, files: projects$0.DocumentInp
     return $Call.ByID(4123750842, projectId, files);
 }
 
-
 /**
  * ListEvalCases returns the test cases of an evaluation set.
  */
@@ -120,9 +117,6 @@ export function ListProjects(): $CancellablePromise<projects$0.Project[] | null>
     return $Call.ByID(245588115);
 }
 
-/**
- * ListPromptTemplates returns reusable persona instruction templates.
- */
 export function ListPromptTemplates(): $CancellablePromise<projects$0.PromptTemplate[] | null> {
     return $Call.ByID(4059446466);
 }
@@ -137,7 +131,6 @@ export function MigrateDatabase(): $CancellablePromise<void> {
 export function ReindexDocument(projectID: string, documentID: string): $CancellablePromise<void> {
     return $Call.ByID(953406149, projectID, documentID);
 }
-
 
 /**
  * RetrieveChunks embeds a query and returns the closest chunks of one project.

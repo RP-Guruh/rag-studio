@@ -27,6 +27,7 @@ import {
 } from '../services/projects'
 import { isWailsRuntime, waitForWailsRuntime } from '../services/settings'
 import { isAdmin } from '../services/auth'
+import { t } from '../i18n'
 
 const route = useRoute()
 const router = useRouter()
@@ -35,11 +36,12 @@ const projectId = computed(() => route.params.id as string)
 const project = computed(() => mockStore.projects.find((p) => p.id === projectId.value))
 
 const activeTab = ref('knowledge')
-const tabs = [
-  { id: 'knowledge', label: 'Knowledge Base' },
-  { id: 'persona', label: 'Persona' },
-  { id: 'evaluation', label: 'Evaluation' }
-]
+// Recomputed on locale change so the tab labels follow the switch immediately.
+const tabs = computed(() => [
+  { id: 'knowledge', label: t('Knowledge Base') },
+  { id: 'persona', label: t('Persona') },
+  { id: 'evaluation', label: t('Evaluation') }
+])
 
 let unsubscribeProgress: (() => void) | undefined
 let unsubscribeFinished: (() => void) | undefined
@@ -195,7 +197,7 @@ async function handleReindexDocument(fileId: string) {
     await reindexDocument(projectId.value, fileId)
     await loadProject()
   } catch (err: any) {
-    trainingErrors.value = [err?.message || 'Failed to re-index document.']
+    trainingErrors.value = [err?.message || t('Failed to re-index document.')]
   }
 }
 
@@ -204,7 +206,7 @@ async function handleCancelTraining() {
   try {
     await cancelTraining(projectId.value)
   } catch (err: any) {
-    trainingErrors.value = [err?.message || 'Failed to stop training.']
+    trainingErrors.value = [err?.message || t('Failed to stop training.')]
   }
 }
 
@@ -218,7 +220,7 @@ async function handleTrainKnowledge() {
       applyTrainingProgress(progress)
     }
   } catch (err: any) {
-    trainingErrors.value = [err?.message || 'Failed to start training.']
+    trainingErrors.value = [err?.message || t('Failed to start training.')]
   }
 }
 
@@ -262,12 +264,12 @@ async function importFiles(files: File[]) {
     if (result.imported.length > 0) {
       uploadMessage.value =
         result.imported.length === 1
-          ? '1 document uploaded.'
-          : `${result.imported.length} documents uploaded.`
+          ? t('1 document uploaded.')
+          : t('{{count}} documents uploaded.', { count: result.imported.length })
     }
     uploadErrors.value = result.errors
   } catch (err: any) {
-    uploadErrors.value = [err?.message || 'Upload failed.']
+    uploadErrors.value = [err?.message || t('Upload failed.')]
   } finally {
     isUploading.value = false
   }
@@ -296,7 +298,7 @@ async function handleRemoveFile(fileId: string) {
   try {
     await deleteDocument(projectId.value, fileId)
   } catch (err: any) {
-    alert(err?.message || 'Failed to delete document.')
+    alert(err?.message || t('Failed to delete document.'))
   }
 }
 
@@ -305,16 +307,23 @@ async function handleSavePersona() {
   isSavingPersona.value = true
   try {
     await saveProjectPersona(projectId.value, personaForm.value)
-    saveMessage.value = 'Persona settings saved successfully.'
+    saveMessage.value = t('Persona settings saved successfully.')
     setTimeout(() => {
       saveMessage.value = ''
     }, 3000)
   } catch (err: any) {
-    alert(err?.message || 'Failed to save persona.')
+    alert(err?.message || t('Failed to save persona.'))
   } finally {
     isSavingPersona.value = false
   }
 }
+
+// These labels use {{name}} params; keeping the t() calls out of the template
+// avoids a literal "}}" terminating the mustache early.
+const fileCountLabel = (count: number) => t('{{count}} files', { count })
+const chunkCountLabel = (count: number) => t('{{count}} chunks', { count })
+const chunkTotalLabel = computed(() => t('{{count}} indexed chunks', { count: totalChunks.value }))
+const lastTrainedLabel = computed(() => t('Last trained: {{date}}', { date: lastIndexedAt.value ?? '' }))
 </script>
 
 <template>
@@ -326,20 +335,20 @@ async function handleSavePersona() {
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="15 18 9 12 15 6"></polyline>
           </svg>
-          <span>Projects</span>
+          <span>{{ t('dashboard.title') }}</span>
         </router-link>
       </div>
 
       <div class="title-row">
         <div class="title-details">
           <h1 class="project-name">{{ project.name }}</h1>
-          <p class="project-description">{{ project.description || 'No description provided.' }}</p>
+          <p class="project-description">{{ project.description || t('No description provided.') }}</p>
         </div>
       </div>
     </header>
 
     <div v-if="isReadOnly" class="readonly-banner">
-      Read-only access — only the administrator can modify projects and settings.
+      {{ t('Read-only access — only the administrator can modify projects and settings.') }}
     </div>
 
     <!-- Main Tabs & Body -->
@@ -376,9 +385,9 @@ async function handleSavePersona() {
             </div>
             <div class="dropzone-text">
               <span class="primary-text">
-                {{ isUploading ? 'Uploading and saving documents...' : 'Click to upload or drag files here' }}
+                {{ isUploading ? t('Uploading and saving documents...') : t('Click to upload or drag files here') }}
               </span>
-              <span class="secondary-text">Supported document formats: PDF, Markdown (.md), Plain Text (.txt), and Word (.doc, .docx) — up to 50 MB each</span>
+              <span class="secondary-text">{{ t('Supported document formats: PDF, Markdown (.md), Plain Text (.txt), and Word (.doc, .docx) — up to 50 MB each') }}</span>
             </div>
           </div>
         </div>
@@ -394,24 +403,24 @@ async function handleSavePersona() {
           <div class="training-banner-top">
             <div class="training-status-label">
               <span class="spinner-dot"></span>
-              <span class="training-title">Building RAG Knowledge Base...</span>
+              <span class="training-title">{{ t('Building RAG Knowledge Base...') }}</span>
             </div>
             <span class="training-percent">{{ trainingProgress }}%</span>
-            <span class="training-action-text" @click="refreshTrainingStatus">Refresh</span>
+            <span class="training-action-text" @click="refreshTrainingStatus">{{ t('Refresh') }}</span>
           </div>
           <div class="progress-track">
             <div class="progress-bar" :style="{ width: `${trainingProgress}%` }"></div>
           </div>
           <div class="training-step-text">{{ trainingStep }}</div>
           <BaseButton variant="secondary" size="sm" type="button" class="training-cancel" @click="handleCancelTraining">
-            Stop training
+            {{ t('Stop training') }}
           </BaseButton>
         </div>
 
         <!-- Training failures -->
         <div v-if="trainingErrors.length > 0" class="training-errors">
           <p class="training-errors-title">
-            {{ isTraining ? 'Documents that failed so far:' : 'Some documents could not be processed:' }}
+            {{ isTraining ? t('Documents that failed so far:') : t('Some documents could not be processed:') }}
           </p>
           <ul class="training-errors-list">
             <li v-for="message in trainingErrors" :key="message">{{ message }}</li>
@@ -422,16 +431,16 @@ async function handleSavePersona() {
         <div class="files-header-row">
           <div class="files-header-left">
             <div class="files-heading-title">
-              <h3 class="files-title">Uploaded documents</h3>
-              <span class="files-count-badge">{{ project.files.length }} files</span>
-              <span v-if="totalChunks > 0" class="chunks-total-badge">{{ totalChunks }} indexed chunks</span>
+              <h3 class="files-title">{{ t('Uploaded documents') }}</h3>
+              <span class="files-count-badge">{{ fileCountLabel(project.files.length) }}</span>
+              <span v-if="totalChunks > 0" class="chunks-total-badge">{{ chunkTotalLabel }}</span>
             </div>
-            <span v-if="lastIndexedAt" class="indexed-at-hint">Last trained: {{ lastIndexedAt }}</span>
+            <span v-if="lastIndexedAt" class="indexed-at-hint">{{ lastTrainedLabel }}</span>
           </div>
 
           <div class="files-header-actions">
             <p v-if="hasStaleChunks" class="stale-hint">
-              Vectors are not stored yet. Re-index to enable chat.
+              {{ t('Vectors are not stored yet. Re-index to enable chat.') }}
             </p>
             <BaseButton
               v-if="!isReadOnly && project.files.length > 0"
@@ -443,7 +452,7 @@ async function handleSavePersona() {
               <svg v-if="!isTraining" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polygon points="5 3 19 12 5 21 5 3"></polygon>
               </svg>
-              <span>{{ isTraining ? 'Training in progress...' : (hasUntrainedFiles || hasStaleChunks ? 'Re-index knowledge base' : 'Train knowledge base') }}</span>
+              <span>{{ isTraining ? t('Training in progress...') : (hasUntrainedFiles || hasStaleChunks ? t('Re-index knowledge base') : t('Train knowledge base')) }}</span>
             </BaseButton>
           </div>
         </div>
@@ -462,13 +471,13 @@ async function handleSavePersona() {
             </colgroup>
             <thead>
               <tr>
-                <th scope="col" class="th-name">File name</th>
-                <th scope="col" class="col-optional">Type</th>
-                <th scope="col">Size</th>
-                <th scope="col" class="col-optional">Added date</th>
-                <th scope="col">Chunks</th>
-                <th scope="col">Status</th>
-                <th scope="col" class="th-actions"><span class="sr-only">Actions</span></th>
+                <th scope="col" class="th-name">{{ t('File name') }}</th>
+                <th scope="col" class="col-optional">{{ t('Type') }}</th>
+                <th scope="col">{{ t('Size') }}</th>
+                <th scope="col" class="col-optional">{{ t('Added date') }}</th>
+                <th scope="col">{{ t('Chunks') }}</th>
+                <th scope="col">{{ t('Status') }}</th>
+                <th scope="col" class="th-actions"><span class="sr-only">{{ t('Actions') }}</span></th>
               </tr>
             </thead>
             <tbody>
@@ -495,7 +504,7 @@ async function handleSavePersona() {
                   <time class="file-date font-mono">{{ file.addedDate }}</time>
                 </td>
                 <td>
-                  <span v-if="file.chunksCount" class="chunks-count-badge">{{ file.chunksCount }} chunks</span>
+                  <span v-if="file.chunksCount" class="chunks-count-badge">{{ chunkCountLabel(file.chunksCount) }}</span>
                   <span v-else class="chunks-empty-dash">—</span>
                 </td>
                 <td>
@@ -506,7 +515,7 @@ async function handleSavePersona() {
                     v-if="!isReadOnly"
                     type="button"
                     class="file-reindex-btn"
-                    title="Re-index this document"
+                    :title="t('Re-index this document')"
                     :disabled="isTraining"
                     @click="handleReindexDocument(file.id)"
                   >
@@ -516,7 +525,7 @@ async function handleSavePersona() {
                     v-if="!isReadOnly"
                     type="button"
                     class="file-delete-btn"
-                    title="Remove file"
+                    :title="t('Remove file')"
                     :disabled="isTraining"
                     @click="handleRemoveFile(file.id)"
                   >
@@ -532,7 +541,7 @@ async function handleSavePersona() {
         </div>
 
         <p v-else class="files-empty-note">
-          No documents yet. Upload files above to build this project's knowledge base.
+          {{ t("No documents yet. Upload files above to build this project's knowledge base.") }}
         </p>
       </section>
 
@@ -540,42 +549,42 @@ async function handleSavePersona() {
       <section v-else-if="activeTab === 'persona'" class="tab-panel persona-panel">
         <form class="persona-form" @submit.prevent="handleSavePersona">
           <FormField
-            label="Persona name"
+            :label="t('Persona name')"
             id="persona-name"
             required
-            hint="Display name for this assistant personality."
+            :hint="t('Display name for this assistant personality.')"
           >
             <input
               id="persona-name"
               v-model="personaForm.name"
               type="text"
               :disabled="isReadOnly"
-              placeholder="e.g. Legal Compliance Assistant"
+              :placeholder="t('e.g. Legal Compliance Assistant')"
             />
           </FormField>
 
           <FormField
-            label="Role"
+            :label="t('Role')"
             id="persona-role"
-            hint="One-line definition of this persona's specialty."
+            :hint="t('One-line definition of this persona\'s specialty.')"
           >
             <input
               id="persona-role"
               v-model="personaForm.role"
               type="text"
               :disabled="isReadOnly"
-              placeholder="e.g. Corporate contract reviewer"
+              :placeholder="t('e.g. Corporate contract reviewer')"
             />
           </FormField>
 
           <FormField
             v-if="promptTemplates.length > 0"
-            label="Instruction template"
+            :label="t('Instruction template')"
             id="persona-template"
-            hint="Start from a saved template, then edit as needed."
+            :hint="t('Start from a saved template, then edit as needed.')"
           >
             <select id="persona-template" :disabled="isReadOnly" @change="applyPromptTemplate(($event.target as HTMLSelectElement).value)">
-              <option value="">Choose a template…</option>
+              <option value="">{{ t('Choose a template…') }}</option>
               <option v-for="template in promptTemplates" :key="template.id" :value="template.name">
                 {{ template.name }}
               </option>
@@ -583,38 +592,38 @@ async function handleSavePersona() {
           </FormField>
 
           <FormField
-            label="Instructions"
+            :label="t('Instructions')"
             id="persona-instructions"
-            hint="System prompt guiding formatting, boundaries, and tone."
+            :hint="t('System prompt guiding formatting, boundaries, and tone.')"
           >
             <textarea
               id="persona-instructions"
               v-model="personaForm.instructions"
               rows="5"
               :disabled="isReadOnly"
-              placeholder="Provide exact guidelines on how the persona should respond..."
+              :placeholder="t('Provide exact guidelines on how the persona should respond...')"
             />
           </FormField>
 
           <div class="form-row-grid">
-            <FormField label="Tone" id="persona-tone">
+            <FormField :label="t('Tone')" id="persona-tone">
               <select id="persona-tone" :disabled="isReadOnly" v-model="personaForm.tone">
-                <option value="Neutral">Neutral</option>
-                <option value="Friendly">Friendly</option>
-                <option value="Formal">Formal</option>
-                <option value="Concise">Concise</option>
+                <option value="Neutral">{{ t('Neutral') }}</option>
+                <option value="Friendly">{{ t('Friendly') }}</option>
+                <option value="Formal">{{ t('Formal') }}</option>
+                <option value="Concise">{{ t('Concise') }}</option>
               </select>
             </FormField>
 
-            <FormField label="Answer language" id="persona-lang">
+            <FormField :label="t('Answer language')" id="persona-lang">
               <select id="persona-lang" :disabled="isReadOnly" v-model="personaForm.answerLanguage">
-                <option value="auto">Auto (match question)</option>
-                <option value="English">English</option>
-                <option value="Indonesian">Indonesian</option>
-                <option value="Spanish">Spanish</option>
-                <option value="German">German</option>
-                <option value="French">French</option>
-                <option value="Japanese">Japanese</option>
+                <option value="auto">{{ t('Auto (match question)') }}</option>
+                <option value="English">{{ t('English') }}</option>
+                <option value="Indonesian">{{ t('Indonesian') }}</option>
+                <option value="Spanish">{{ t('Spanish') }}</option>
+                <option value="German">{{ t('German') }}</option>
+                <option value="French">{{ t('French') }}</option>
+                <option value="Japanese">{{ t('Japanese') }}</option>
               </select>
             </FormField>
           </div>
@@ -626,16 +635,16 @@ async function handleSavePersona() {
                 v-model="personaForm.strictKnowledge"
                 class="toggle-checkbox"
               />
-              <span class="toggle-label-text">Strict knowledge grounding</span>
+              <span class="toggle-label-text">{{ t('Strict knowledge grounding') }}</span>
             </label>
             <span class="toggle-hint">
-              If enabled, the assistant will explicitly state that it does not know if the answer cannot be found in the knowledge files.
+              {{ t('If enabled, the assistant will explicitly state that it does not know if the answer cannot be found in the knowledge files.') }}
             </span>
           </div>
 
           <div class="form-actions-row">
             <BaseButton v-if="!isReadOnly" variant="primary" type="submit" :disabled="isSavingPersona">
-              {{ isSavingPersona ? 'Saving...' : 'Save persona' }}
+              {{ isSavingPersona ? t('Saving...') : t('Save persona') }}
             </BaseButton>
             <span v-if="saveMessage" class="save-success-msg">{{ saveMessage }}</span>
           </div>
@@ -650,12 +659,12 @@ async function handleSavePersona() {
 
   <div v-else class="page-container">
     <EmptyState
-      title="Project not found"
-      description="The requested RAG project does not exist or was removed."
+      :title="t('Project not found')"
+      :description="t('The requested RAG project does not exist or was removed.')"
     >
       <template #action>
         <BaseButton variant="primary" @click="router.push('/dashboard')">
-          Back to projects
+          {{ t('Back to projects') }}
         </BaseButton>
       </template>
     </EmptyState>
