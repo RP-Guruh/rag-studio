@@ -3,7 +3,6 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Events } from '@wailsio/runtime'
 import BaseButton from '../components/BaseButton.vue'
-import EvaluationPanel from './EvaluationPanel.vue'
 import TabBar from '../components/TabBar.vue'
 import FormField from '../components/FormField.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -39,8 +38,7 @@ const activeTab = ref('knowledge')
 // Recomputed on locale change so the tab labels follow the switch immediately.
 const tabs = computed(() => [
   { id: 'knowledge', label: t('Knowledge Base') },
-  { id: 'persona', label: t('Persona') },
-  { id: 'evaluation', label: t('Evaluation') }
+  { id: 'persona', label: t('Persona') }
 ])
 
 let unsubscribeProgress: (() => void) | undefined
@@ -651,9 +649,6 @@ const lastTrainedLabel = computed(() => t('Last trained: {{date}}', { date: last
         </form>
       </section>
 
-      <section v-else-if="activeTab === 'evaluation'" class="tab-panel">
-        <EvaluationPanel :project-id="projectId" :readonly="isReadOnly" />
-      </section>
     </div>
   </div>
 
