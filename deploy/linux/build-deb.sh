@@ -40,9 +40,13 @@ if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
   chmod 700 "$GNUPGHOME"
   printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
   KEY_ID="${GPG_KEY_ID:-863320B6B89B26B2988B55883D8DC7AC7D242CF0}"
-  dpkg-sig --sign builder -k "$KEY_ID" "$DEB"
+  # CI has no TTY: force loopback pinentry with an empty passphrase.
+  : > "$GNUPGHOME/passphrase"
+  GPG_OPTS="--pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --batch --yes"
+  printf 'allow-loopback-pinentry\n' >> "$GNUPGHOME/gpg.conf"
+  dpkg-sig --sign builder -k "$KEY_ID" -g "$GPG_OPTS" "$DEB"
   gpg --armor --export "$KEY_ID" > "$OUT/rag-studio-release.gpg.key"
-  gpg --armor --detach-sign --output "$DEB.asc" "$DEB"
+  gpg $GPG_OPTS --armor --detach-sign --output "$DEB.asc" "$DEB"
 fi
 
 echo "$DEB"
