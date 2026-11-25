@@ -302,7 +302,7 @@ gpg --verify rag-studio_*.deb.asc rag-studio_*.deb
 
 Fingerprint kunci rilis: **`863320B6B89B26B2988B55883D8DC7AC7D242CF0`**.
 
-Untuk maintainer: workflow membutuhkan GitHub Secrets `GPG_PRIVATE_KEY` (private key ASCII-armored, tanpa passphrase) dan opsional `GPG_KEY_ID`. Installer Windows ditandatangani jika secret `WINDOWS_PFX_BASE64` (sertifikat `.pfx` base64) dan `WINDOWS_PFX_PASSWORD` tersedia. Tanpa keduanya, file tetap dihasilkan tetapi peringatan kepercayaan akan muncul.
+Untuk maintainer: workflow membutuhkan GitHub Secrets `GPG_PRIVATE_KEY` (private key ASCII-armored), opsional `GPG_KEY_ID`, dan `GPG_PASSPHRASE` jika kunci tersebut dilindungi passphrase. Installer Windows ditandatangani jika secret `WINDOWS_PFX_BASE64` (sertifikat `.pfx` base64) dan `WINDOWS_PFX_PASSWORD` tersedia. Tanpa keduanya, file tetap dihasilkan tetapi peringatan kepercayaan akan muncul.
 
 ## Deployment & download
 

@@ -114,6 +114,7 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: bash deploy/linux/build-deb.sh dist/rag-studio "${{ github.ref_name }}" "${{ matrix.arch }}" release
       - uses: actions/upload-artifact@v4
         with:

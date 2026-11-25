@@ -40,8 +40,9 @@ if [ -n "${GPG_PRIVATE_KEY:-}" ]; then
   chmod 700 "$GNUPGHOME"
   printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
   KEY_ID="${GPG_KEY_ID:-863320B6B89B26B2988B55883D8DC7AC7D242CF0}"
-  # CI has no TTY: force loopback pinentry with an empty passphrase.
-  : > "$GNUPGHOME/passphrase"
+  # CI has no TTY: force loopback pinentry and feed the passphrase from a file.
+  # GPG_PASSPHRASE may be empty when the signing key has no passphrase.
+  printf '%s\n' "${GPG_PASSPHRASE:-}" > "$GNUPGHOME/passphrase"
   GPG_OPTS="--pinentry-mode loopback --passphrase-file $GNUPGHOME/passphrase --batch --yes"
   printf 'allow-loopback-pinentry\n' > "$GNUPGHOME/gpg-agent.conf"
   gpgconf --kill gpg-agent 2>/dev/null || true
