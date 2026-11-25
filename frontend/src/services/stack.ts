@@ -17,6 +17,11 @@ export async function startLocalStack(): Promise<StackResult | null> {
   return StackService.StartLocalStack()
 }
 
+export async function startLocalStackClean(): Promise<StackResult | null> {
+  if (!(await waitForWailsRuntime())) return null
+  return StackService.StartLocalStackClean()
+}
+
 export async function stopLocalStack(): Promise<StackResult | null> {
   if (!(await waitForWailsRuntime())) return null
   return StackService.StopLocalStack()

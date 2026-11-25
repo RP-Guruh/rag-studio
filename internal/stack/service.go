@@ -76,8 +76,9 @@ type Status struct {
 
 // Result is the outcome of a stack operation.
 type Result struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
+	Success         bool   `json:"success"`
+	Message         string `json:"message"`
+	CredentialIssue bool   `json:"credentialIssue"`
 }
 
 // Service is Wails-bindable.
@@ -162,13 +163,67 @@ func (s *Service) StartLocalStack() (Result, error) {
 	cmd.Dir = s.dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		message := strings.TrimSpace(string(output))
-		if message == "" {
-			message = err.Error()
-		}
-		return Result{Success: false, Message: "docker compose up failed: " + message}, nil
+		return s.composeFailure("up", output, err)
 	}
 	return Result{Success: true, Message: "Local stack started. Waiting for services to become healthy."}, nil
+}
+
+func (s *Service) composeFailure(action string, output []byte, err error) (Result, error) {
+	message := strings.TrimSpace(string(output))
+	if message == "" {
+		message = err.Error()
+	}
+	lower := strings.ToLower(message)
+	credentialIssue := strings.Contains(lower, "credential") ||
+		strings.Contains(lower, "docker-credential") ||
+		strings.Contains(lower, "error getting credentials")
+	if credentialIssue {
+		return Result{
+			Success:         false,
+			CredentialIssue: true,
+			Message: "Docker config uses a credential helper that is not installed. " +
+				"Remove credsStore from ~/.docker/config.json, install Docker Desktop, " +
+				"or retry with a clean Docker config. Details: " + message,
+		}, nil
+	}
+	return Result{Success: false, Message: "docker compose " + action + " failed: " + message}, nil
+}
+
+// StartLocalStackClean retries the stack with an isolated Docker config. This
+// avoids a broken credsStore in the user's Docker Desktop config. The images
+// used by the local stack are public, so no saved credentials are needed.
+func (s *Service) StartLocalStackClean() (Result, error) {
+	if err := s.ensureDir(); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+	status, err := s.StackStatus()
+	if err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+	if !status.DockerInstalled || !status.ComposePlugin || !status.Daemon {
+		return Result{Success: false, Message: "Docker is not ready. " + status.Detail}, nil
+	}
+	if err := s.writeFiles(); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+
+	configDir := filepath.Join(s.dir, "docker-config")
+	if err := os.MkdirAll(configDir, 0o700); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+	configPath := filepath.Join(configDir, "config.json")
+	if err := os.WriteFile(configPath, []byte("{}\n"), 0o600); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
+
+	cmd := exec.Command("docker", "compose", "up", "-d")
+	cmd.Dir = s.dir
+	cmd.Env = append(os.Environ(), "DOCKER_CONFIG="+configDir)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return s.composeFailure("up", output, err)
+	}
+	return Result{Success: true, Message: "Local stack started with an isolated Docker config."}, nil
 }
 
 // StopLocalStack stops the containers without deleting data volumes.
@@ -180,11 +235,7 @@ func (s *Service) StopLocalStack() (Result, error) {
 	cmd.Dir = s.dir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		message := strings.TrimSpace(string(output))
-		if message == "" {
-			message = err.Error()
-		}
-		return Result{Success: false, Message: "docker compose down failed: " + message}, nil
+		return s.composeFailure("down", output, err)
 	}
 	return Result{Success: true, Message: "Local stack stopped. Data volume is preserved."}, nil
 }

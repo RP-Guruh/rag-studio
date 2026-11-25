@@ -38,6 +38,15 @@ export function StartLocalStack(): $CancellablePromise<$models.Result> {
 }
 
 /**
+ * StartLocalStackClean retries the stack with an isolated Docker config. This
+ * avoids a broken credsStore in the user's Docker Desktop config. The images
+ * used by the local stack are public, so no saved credentials are needed.
+ */
+export function StartLocalStackClean(): $CancellablePromise<$models.Result> {
+    return $Call.ByID(298503169);
+}
+
+/**
  * StopLocalStack stops the containers without deleting data volumes.
  */
 export function StopLocalStack(): $CancellablePromise<$models.Result> {

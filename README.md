@@ -405,6 +405,8 @@ cd ~/.config/rag-studio/stack && docker compose up -d && docker compose logs --t
 
 User harus masuk grup `docker`, lalu logout dan login ulang setelah `usermod -aG docker $USER`.
 
+Bila error menyebut `docker-credential-desktop` atau `error getting credentials`, file `~/.docker/config.json` masih memakai credential helper Docker Desktop. Hapus `"credsStore": "desktop"` sehingga berisi `{"auths": {}}`, atau install Docker Desktop. Aplikasi juga menyediakan tombol **Retry with clean Docker config** yang menjalankan stack dengan konfigurasi Docker terisolasi.
+
 **Status Docling tetap stopped.** Periksa `docker compose ps -a` dan log container. Port 5001 tidak boleh dipakai layanan lain.
 
 **Ollama tidak terdeteksi.** Jalankan `ollama serve`, lalu pastikan `http://localhost:11434/api/tags` merespons.

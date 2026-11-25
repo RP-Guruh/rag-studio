@@ -19,6 +19,7 @@ import {
 import {
   stackStatus,
   startLocalStack,
+  startLocalStackClean,
   stopLocalStack,
   applyLocalPreset,
   type StackStatus
@@ -33,6 +34,7 @@ const stack = ref<StackStatus | null>(null)
 const downloadProgress = ref(0)
 const downloadedPath = ref('')
 const busyStack = ref(false)
+const credentialIssue = ref(false)
 
 onMounted(async () => {
   try {
@@ -60,10 +62,36 @@ async function handleStartStack() {
   busyStack.value = true
   error.value = ''
   try {
+    credentialIssue.value = false
     const result = await startLocalStack()
     if (result) {
       if (result.success) message.value = result.message
-      else error.value = result.message
+      else {
+        error.value = result.message
+        credentialIssue.value = Boolean(result.credentialIssue)
+      }
+    }
+    await refreshStack()
+  } catch (err) {
+    error.value = errorText(err)
+  } finally {
+    busyStack.value = false
+  }
+}
+
+async function handleStartStackClean() {
+  busyStack.value = true
+  error.value = ''
+  try {
+    const result = await startLocalStackClean()
+    if (result) {
+      if (result.success) {
+        message.value = result.message
+        credentialIssue.value = false
+      } else {
+        error.value = result.message
+        credentialIssue.value = Boolean(result.credentialIssue)
+      }
     }
     await refreshStack()
   } catch (err) {
@@ -235,6 +263,15 @@ const items = [
       <div v-if="stack?.detail" class="health-detail">{{ stack.detail }}</div>
       <div class="row-actions">
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleStartStack">Start local stack</button>
+        <button
+          v-if="credentialIssue"
+          type="button"
+          class="action-btn"
+          :disabled="busyStack"
+          @click="handleStartStackClean"
+        >
+          Retry with clean Docker config
+        </button>
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleStopStack">Stop</button>
         <button type="button" class="action-btn" :disabled="busyStack" @click="handleApplyPreset">Use local preset</button>
         <button type="button" class="action-btn" @click="refreshStack">Refresh</button>

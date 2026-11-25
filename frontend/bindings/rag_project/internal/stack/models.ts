@@ -7,6 +7,7 @@
 export interface Result {
     "success": boolean;
     "message": string;
+    "credentialIssue": boolean;
 }
 
 /**
