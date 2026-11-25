@@ -17,6 +17,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"rag_project/internal/auth"
 	"rag_project/internal/settings"
 )
 
@@ -86,6 +87,7 @@ type Result struct {
 // Service is Wails-bindable.
 type Service struct {
 	store *settings.Store
+	auth  *auth.Service
 	dir   string
 }
 
@@ -97,12 +99,21 @@ func emitStackProgress(stage, message string) {
 	app.Event.Emit("stack:progress", map[string]string{"stage": stage, "message": message})
 }
 
-func NewService(store *settings.Store) *Service {
+func NewService(store *settings.Store, authService *auth.Service) *Service {
 	dir := ""
 	if base, err := os.UserConfigDir(); err == nil {
 		dir = filepath.Join(base, "rag-studio", "stack")
 	}
-	return &Service{store: store, dir: dir}
+	return &Service{store: store, auth: authService, dir: dir}
+}
+
+// authorize allows starting the local stack during first-run setup and
+// restricts it to the administrator afterwards.
+func (s *Service) authorize() error {
+	if s.auth == nil {
+		return nil
+	}
+	return s.auth.RequireSetupOrAdmin()
 }
 
 func (s *Service) ensureDir() error {
@@ -156,6 +167,9 @@ func (s *Service) StackStatus() (Status, error) {
 // StartLocalStack writes the compose files and starts the containers.
 // Command output is returned in Result so the UI can show the real Docker error.
 func (s *Service) StartLocalStack() (Result, error) {
+	if err := s.authorize(); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
 	emitStackProgress("checking", "Checking Docker...")
 	if err := s.ensureDir(); err != nil {
 		return Result{Success: false, Message: err.Error()}, nil
@@ -210,6 +224,9 @@ func (s *Service) composeFailure(action string, output []byte, err error) (Resul
 // avoids a broken credsStore in the user's Docker Desktop config. The images
 // used by the local stack are public, so no saved credentials are needed.
 func (s *Service) StartLocalStackClean() (Result, error) {
+	if err := s.authorize(); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
 	if err := s.ensureDir(); err != nil {
 		return Result{Success: false, Message: err.Error()}, nil
 	}
@@ -247,6 +264,9 @@ func (s *Service) StartLocalStackClean() (Result, error) {
 
 // StopLocalStack stops the containers without deleting data volumes.
 func (s *Service) StopLocalStack() (Result, error) {
+	if err := s.authorize(); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
 	if s.dir == "" {
 		return Result{Success: false, Message: "Stack directory is unavailable."}, nil
 	}
@@ -292,6 +312,9 @@ func randomPassword() (string, error) {
 // ApplyLocalPreset fills Settings with local-stack defaults. It also starts
 // the stack first so database migration can run during SaveDatabase.
 func (s *Service) ApplyLocalPreset() (Result, error) {
+	if err := s.authorize(); err != nil {
+		return Result{Success: false, Message: err.Error()}, nil
+	}
 	status, err := s.StackStatus()
 	if err != nil {
 		return Result{}, err

@@ -16,7 +16,7 @@ import {
   type EvalReport
 } from '../services/projects'
 
-const props = defineProps<{ projectId: string }>()
+const props = defineProps<{ projectId: string; readonly?: boolean }>()
 
 const config = ref<RetrievalConfig>({
   topK: 8,
@@ -63,6 +63,7 @@ async function loadCases() {
 }
 
 async function saveConfig() {
+  if (props.readonly) return
   error.value = ''
   try {
     await updateRetrievalConfig(props.projectId, config.value)
@@ -72,6 +73,7 @@ async function saveConfig() {
 }
 
 async function handleCreateSet() {
+  if (props.readonly) return
   error.value = ''
   try {
     const set = await createEvalSet(props.projectId, setName.value.trim() || 'Knowledge check')
@@ -84,7 +86,7 @@ async function handleCreateSet() {
 }
 
 async function handleAddCase() {
-  if (!selectedSetId.value || !question.value.trim()) return
+  if (props.readonly || !selectedSetId.value || !question.value.trim()) return
   error.value = ''
   try {
     await addEvalCase(selectedSetId.value, question.value.trim(), expectedAnswer.value.trim(), expectedSource.value.trim())
@@ -98,7 +100,7 @@ async function handleAddCase() {
 }
 
 async function handleRun() {
-  if (!selectedSetId.value) return
+  if (props.readonly || !selectedSetId.value) return
   busy.value = true
   error.value = ''
   try {
@@ -119,34 +121,34 @@ async function handleRun() {
       <h3 class="card-title">Retrieval settings</h3>
       <div class="config-grid">
         <FormField label="Top K" id="eval-topk">
-          <input id="eval-topk" v-model.number="config.topK" type="number" min="1" max="20" />
+          <input :disabled="readonly" id="eval-topk" v-model.number="config.topK" type="number" min="1" max="20" />
         </FormField>
         <FormField label="Minimum score" id="eval-minscore">
-          <input id="eval-minscore" v-model.number="config.minScore" type="number" min="0" max="1" step="0.05" />
+          <input :disabled="readonly" id="eval-minscore" v-model.number="config.minScore" type="number" min="0" max="1" step="0.05" />
         </FormField>
         <FormField label="Hybrid weight" id="eval-hybrid-weight">
-          <input id="eval-hybrid-weight" v-model.number="config.hybridWeight" type="number" min="0" max="1" step="0.05" />
+          <input :disabled="readonly" id="eval-hybrid-weight" v-model.number="config.hybridWeight" type="number" min="0" max="1" step="0.05" />
         </FormField>
         <FormField label="Rerank weight" id="eval-rerank-weight">
-          <input id="eval-rerank-weight" v-model.number="config.rerankWeight" type="number" min="0" max="1" step="0.05" />
+          <input :disabled="readonly" id="eval-rerank-weight" v-model.number="config.rerankWeight" type="number" min="0" max="1" step="0.05" />
         </FormField>
       </div>
       <div class="config-toggles">
-        <label><input v-model="config.hybrid" type="checkbox" /> Hybrid search</label>
-        <label><input v-model="config.rerank" type="checkbox" /> Rerank results</label>
-        <label><input v-model="config.guardrails" type="checkbox" /> Guardrails</label>
+        <label><input :disabled="readonly" v-model="config.hybrid" type="checkbox" /> Hybrid search</label>
+        <label><input :disabled="readonly" v-model="config.rerank" type="checkbox" /> Rerank results</label>
+        <label><input :disabled="readonly" v-model="config.guardrails" type="checkbox" /> Guardrails</label>
       </div>
-      <BaseButton variant="outline" size="sm" type="button" @click="saveConfig">Save retrieval settings</BaseButton>
+      <BaseButton v-if="!readonly" variant="outline" size="sm" type="button" @click="saveConfig">Save retrieval settings</BaseButton>
     </section>
 
     <section class="eval-card">
       <h3 class="card-title">Evaluation sets</h3>
       <div class="config-grid">
         <FormField label="Set name" id="eval-set-name">
-          <input id="eval-set-name" v-model="setName" type="text" />
+          <input :disabled="readonly" id="eval-set-name" v-model="setName" type="text" />
         </FormField>
         <div class="set-actions">
-          <BaseButton variant="outline" size="sm" type="button" @click="handleCreateSet">Create set</BaseButton>
+          <BaseButton v-if="!readonly" variant="outline" size="sm" type="button" @click="handleCreateSet">Create set</BaseButton>
         </div>
       </div>
       <label class="stacked-label">
@@ -161,18 +163,18 @@ async function handleRun() {
       <h3 class="card-title">Test cases</h3>
       <div class="config-grid">
         <FormField label="Question" id="eval-question">
-          <input id="eval-question" v-model="question" type="text" placeholder="Question to ask the project" />
+          <input :disabled="readonly" id="eval-question" v-model="question" type="text" placeholder="Question to ask the project" />
         </FormField>
         <FormField label="Expected answer (optional)" id="eval-expected-answer">
-          <input id="eval-expected-answer" v-model="expectedAnswer" type="text" />
+          <input :disabled="readonly" id="eval-expected-answer" v-model="expectedAnswer" type="text" />
         </FormField>
         <FormField label="Expected source file (optional)" id="eval-expected-source">
-          <input id="eval-expected-source" v-model="expectedSource" type="text" placeholder="menu.pdf" />
+          <input :disabled="readonly" id="eval-expected-source" v-model="expectedSource" type="text" placeholder="menu.pdf" />
         </FormField>
       </div>
       <div class="row-actions">
-        <BaseButton variant="outline" size="sm" type="button" @click="handleAddCase">Add case</BaseButton>
-        <BaseButton variant="primary" size="sm" type="button" :disabled="busy || cases.length === 0" @click="handleRun">
+        <BaseButton v-if="!readonly" variant="outline" size="sm" type="button" @click="handleAddCase">Add case</BaseButton>
+        <BaseButton v-if="!readonly" variant="primary" size="sm" type="button" :disabled="busy || cases.length === 0" @click="handleRun">
           {{ busy ? 'Running…' : 'Run evaluation' }}
         </BaseButton>
       </div>

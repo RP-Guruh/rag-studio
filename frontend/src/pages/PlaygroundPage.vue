@@ -7,11 +7,9 @@ import {
   mockStore,
   sendPlaygroundMessage,
   clearPlaygroundMessages,
-  isDemoProject,
   type ChatMessage,
   type RetrievedChunk
 } from '../mock/data'
-import { isGuest } from '../services/auth'
 import {
   askProject,
   askProjectStream,
@@ -58,12 +56,8 @@ const currentChunks = computed(() => {
 
 onMounted(async () => {
   const projects = await listProjects()
-  if (projects.length > 0) {
-    mockStore.projects = projects
-  }
-  if (isGuest.value) {
-    selectedProjectId.value = 'demo-solaria'
-  } else if (!mockStore.projects.some((p) => p.id === selectedProjectId.value)) {
+  mockStore.projects = projects
+  if (!mockStore.projects.some((p) => p.id === selectedProjectId.value)) {
     selectedProjectId.value = mockStore.projects[0]?.id || ''
   }
   mockStore.playground.selectedProjectId = selectedProjectId.value
@@ -131,7 +125,7 @@ async function handleSendMessage() {
   sendError.value = ''
   debugInfo.value = null
 
-  if (isGuest.value || isDemoProject(projectId) || !(await waitForWailsRuntime())) {
+  if (!(await waitForWailsRuntime())) {
     sendPlaygroundMessage(projectId, query)
     await scrollToBottom()
     return
@@ -240,10 +234,6 @@ function toggleSidePanel() {
         </BaseButton>
       </div>
     </header>
-
-    <div v-if="isGuest" class="demo-banner">
-      Demo mode — sample answers only. Register to test your own knowledge base.
-    </div>
 
     <!-- Main Playground Workspace -->
     <div class="playground-workspace">
@@ -438,14 +428,6 @@ function toggleSidePanel() {
   display: flex;
   align-items: center;
   gap: var(--space-8);
-}
-
-.demo-banner {
-  padding: var(--space-8) var(--space-24);
-  background-color: var(--color-accent-subtle);
-  border-bottom: 1px solid var(--color-border);
-  color: var(--color-text-muted);
-  font-size: var(--font-size-sm);
 }
 
 .playground-workspace {

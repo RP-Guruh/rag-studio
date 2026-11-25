@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+
+	"rag_project/internal/auth"
 )
 
 // Version is overridden at build time with -X rag_project/internal/update.Version=x.y.z.
@@ -58,10 +60,19 @@ type release struct {
 // Service is Wails-bindable.
 type Service struct {
 	client *http.Client
+	auth   *auth.Service
 }
 
-func NewService() *Service {
-	return &Service{client: &http.Client{Timeout: requestLimit}}
+func NewService(authService *auth.Service) *Service {
+	return &Service{client: &http.Client{Timeout: requestLimit}, auth: authService}
+}
+
+// authorize reserves installer actions for the administrator.
+func (s *Service) authorize() error {
+	if s.auth == nil {
+		return nil
+	}
+	return s.auth.RequireAdmin()
 }
 
 func (s *Service) getRelease(ctx context.Context, url string) (*release, int, error) {
@@ -241,6 +252,9 @@ func (s *Service) openDownload(ctx context.Context, apiURL, browserURL string) (
 // DownloadLatestInstaller downloads the asset matching this OS/architecture
 // into the user's Downloads directory and returns the saved path.
 func (s *Service) DownloadLatestInstaller() (string, error) {
+	if err := s.authorize(); err != nil {
+		return "", err
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	latest, err := s.latest(ctx)
@@ -337,6 +351,9 @@ type InstallResult struct {
 // rights, so the user still confirms the system prompt. The application itself
 // cannot silently replace a running executable on Windows or macOS.
 func (s *Service) InstallUpdate(path string) (*InstallResult, error) {
+	if err := s.authorize(); err != nil {
+		return nil, err
+	}
 	if strings.TrimSpace(path) == "" {
 		return nil, errors.New("no downloaded installer is available")
 	}

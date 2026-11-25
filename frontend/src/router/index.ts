@@ -1,5 +1,5 @@
 import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
-import { isAuthenticated, isAdmin, hasUsers } from '../services/auth'
+import { isAuthenticated, isAdmin, isBootstrap } from '../services/auth'
 
 import LoginPage from '../pages/LoginPage.vue'
 import AppShell from '../layouts/AppShell.vue'
@@ -96,15 +96,23 @@ export const router = createRouter({
   routes
 })
 
-// Navigation guard to ensure login screen is shown first unless signed in
+// Setup is reachable only before the first account exists; afterwards only the
+// administrator may enter settings. Everything else needs a signed-in user.
 router.beforeEach((to, _from, next) => {
-  const firstRun = !hasUsers.value && !isAuthenticated.value
   const setupRoute = to.path.startsWith('/settings')
-  if (to.path !== '/login' && !isAuthenticated.value && !(firstRun && setupRoute)) {
-    next('/login')
-  } else if (to.path === '/settings/users' && !isAdmin.value) {
-    next('/settings/health')
-  } else {
-    next()
+
+  if (to.path === '/login') {
+    if (isAuthenticated.value && !isBootstrap.value) next('/dashboard')
+    else next()
+    return
   }
+
+  if (!isAuthenticated.value) {
+    if (isBootstrap.value && setupRoute) next()
+    else next('/login')
+    return
+  }
+
+  if (setupRoute && !isAdmin.value) next('/dashboard')
+  else next()
 })

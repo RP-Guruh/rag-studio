@@ -9,6 +9,7 @@ import ConfirmModal from '../components/ConfirmModal.vue'
 import { mockStore, type Project } from '../mock/data'
 import { listProjects, createProject, updateProject, deleteProject, importProject } from '../services/projects'
 import { t } from '../i18n'
+import { isAdmin } from '../services/auth'
 
 const router = useRouter()
 const isDialogOpen = ref(false)
@@ -25,9 +26,7 @@ const editingProjectId = ref<string>('')
 onMounted(async () => {
   try {
     const list = await listProjects()
-    if (list && list.length > 0) {
-      mockStore.projects = list
-    }
+    mockStore.projects = list
   } catch (err) {
     console.error('Failed to load projects:', err)
   } finally {
@@ -141,10 +140,13 @@ async function handleImportProject(event: Event) {
         <h1 class="page-title">{{ t('dashboard.title') }}</h1>
         <p class="page-description">Manage RAG knowledge bases, retrieval settings, and personas.</p>
       </div>
-      <label class="import-project-btn">
-        Import project
-        <input type="file" accept="application/json,.json" @change="handleImportProject" />
-      </label>
+      <div class="header-actions">
+        <BaseButton v-if="isAdmin" variant="primary" @click="openNewProjectDialog">New project</BaseButton>
+        <label v-if="isAdmin" class="import-project-btn">
+          Import project
+          <input type="file" accept="application/json,.json" @change="handleImportProject" />
+        </label>
+      </div>
     </header>
 
     <!-- Content Area -->
@@ -220,14 +222,8 @@ async function handleImportProject(event: Event) {
       <EmptyState
         v-else
         title="No projects yet"
-        description="Create your first RAG project to index documents and configure retrieval personas."
-      >
-        <template #action>
-          <BaseButton variant="primary" @click="openNewProjectDialog">
-            New project
-          </BaseButton>
-        </template>
-      </EmptyState>
+        description="No projects are visible yet. Projects assigned to your account will appear here."
+      />
     </div>
 
     <!-- New Project Dialog -->
@@ -371,6 +367,12 @@ async function handleImportProject(event: Event) {
 .page-description {
   font-size: var(--font-size-base);
   color: var(--color-text-muted);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
 }
 
 .import-project-btn {

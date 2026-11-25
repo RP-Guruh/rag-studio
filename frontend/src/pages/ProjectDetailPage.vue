@@ -27,7 +27,7 @@ import {
   type TrainingProgress
 } from '../services/projects'
 import { isWailsRuntime, waitForWailsRuntime } from '../services/settings'
-import { isGuest } from '../services/auth'
+import { isAdmin } from '../services/auth'
 
 const route = useRoute()
 const router = useRouter()
@@ -147,7 +147,7 @@ const hasStaleChunks = computed(() =>
   project.value?.files.some((f) => f.status === 'Chunked') || false
 )
 
-const isReadOnly = computed(() => isGuest.value)
+const isReadOnly = computed(() => !isAdmin.value)
 const promptTemplates = ref<PromptTemplate[]>([])
 
 function applyPromptTemplate(name: string) {
@@ -217,6 +217,7 @@ async function handleReindexDocument(fileId: string) {
 }
 
 async function handleCancelTraining() {
+  if (isReadOnly.value) return
   try {
     await cancelTraining(projectId.value)
   } catch (err: any) {
@@ -225,7 +226,7 @@ async function handleCancelTraining() {
 }
 
 async function handleTrainKnowledge() {
-  if (!project.value || isTraining.value || project.value.files.length === 0) return
+  if (isReadOnly.value || !project.value || isTraining.value || project.value.files.length === 0) return
 
   trainingErrors.value = []
   try {
@@ -267,7 +268,7 @@ watch(
 )
 
 async function importFiles(files: File[]) {
-  if (files.length === 0 || isUploading.value) return
+  if (isReadOnly.value || files.length === 0 || isUploading.value) return
 
   isUploading.value = true
   uploadMessage.value = ''
@@ -303,11 +304,12 @@ function handleDrop(e: DragEvent) {
 }
 
 function triggerFileInput() {
-  if (isUploading.value) return
+  if (isReadOnly.value || isUploading.value) return
   fileInputRef.value?.click()
 }
 
 async function handleRemoveFile(fileId: string) {
+  if (isReadOnly.value) return
   try {
     await deleteDocument(projectId.value, fileId)
   } catch (err: any) {
@@ -316,6 +318,7 @@ async function handleRemoveFile(fileId: string) {
 }
 
 async function handleSavePersona() {
+  if (isReadOnly.value) return
   isSavingPersona.value = true
   try {
     await saveProjectPersona(projectId.value, personaForm.value)
@@ -356,7 +359,7 @@ async function handleSavePersona() {
     </header>
 
     <div v-if="isReadOnly" class="readonly-banner">
-      Demo project — read only. Register or sign in to manage your own knowledge base.
+      Read-only access — only the administrator can modify projects and settings.
     </div>
 
     <!-- Main Tabs & Body -->
@@ -366,6 +369,7 @@ async function handleSavePersona() {
       <!-- Tab 1: Knowledge -->
       <section v-if="activeTab === 'knowledge'" class="tab-panel">
         <div
+          v-if="!isReadOnly"
           class="upload-dropzone"
           :class="{ 'upload-dropzone--drag': isDragging, 'upload-dropzone--busy': isUploading }"
           @dragover.prevent="isDragging = true"
@@ -450,7 +454,7 @@ async function handleSavePersona() {
               Vectors are not stored yet. Re-index to enable chat.
             </p>
             <BaseButton
-              v-if="project.files.length > 0"
+              v-if="!isReadOnly && project.files.length > 0"
               variant="primary"
               :disabled="isTraining"
               class="train-btn"
@@ -565,6 +569,7 @@ async function handleSavePersona() {
               id="persona-name"
               v-model="personaForm.name"
               type="text"
+              :disabled="isReadOnly"
               placeholder="e.g. Legal Compliance Assistant"
             />
           </FormField>
@@ -578,6 +583,7 @@ async function handleSavePersona() {
               id="persona-role"
               v-model="personaForm.role"
               type="text"
+              :disabled="isReadOnly"
               placeholder="e.g. Corporate contract reviewer"
             />
           </FormField>
@@ -588,7 +594,7 @@ async function handleSavePersona() {
             id="persona-template"
             hint="Start from a saved template, then edit as needed."
           >
-            <select id="persona-template" @change="applyPromptTemplate(($event.target as HTMLSelectElement).value)">
+            <select id="persona-template" :disabled="isReadOnly" @change="applyPromptTemplate(($event.target as HTMLSelectElement).value)">
               <option value="">Choose a template…</option>
               <option v-for="template in promptTemplates" :key="template.id" :value="template.name">
                 {{ template.name }}
@@ -605,13 +611,14 @@ async function handleSavePersona() {
               id="persona-instructions"
               v-model="personaForm.instructions"
               rows="5"
+              :disabled="isReadOnly"
               placeholder="Provide exact guidelines on how the persona should respond..."
             />
           </FormField>
 
           <div class="form-row-grid">
             <FormField label="Tone" id="persona-tone">
-              <select id="persona-tone" v-model="personaForm.tone">
+              <select id="persona-tone" :disabled="isReadOnly" v-model="personaForm.tone">
                 <option value="Neutral">Neutral</option>
                 <option value="Friendly">Friendly</option>
                 <option value="Formal">Formal</option>
@@ -620,7 +627,7 @@ async function handleSavePersona() {
             </FormField>
 
             <FormField label="Answer language" id="persona-lang">
-              <select id="persona-lang" v-model="personaForm.answerLanguage">
+              <select id="persona-lang" :disabled="isReadOnly" v-model="personaForm.answerLanguage">
                 <option value="auto">Auto (match question)</option>
                 <option value="English">English</option>
                 <option value="Indonesian">Indonesian</option>
@@ -647,7 +654,7 @@ async function handleSavePersona() {
           </div>
 
           <div class="form-actions-row">
-            <BaseButton variant="primary" type="submit" :disabled="isSavingPersona">
+            <BaseButton v-if="!isReadOnly" variant="primary" type="submit" :disabled="isSavingPersona">
               {{ isSavingPersona ? 'Saving...' : 'Save persona' }}
             </BaseButton>
             <span v-if="saveMessage" class="save-success-msg">{{ saveMessage }}</span>
@@ -656,7 +663,7 @@ async function handleSavePersona() {
       </section>
 
       <section v-else-if="activeTab === 'evaluation'" class="tab-panel">
-        <EvaluationPanel :project-id="projectId" />
+        <EvaluationPanel :project-id="projectId" :readonly="isReadOnly" />
       </section>
     </div>
   </div>

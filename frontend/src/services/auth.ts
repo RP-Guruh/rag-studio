@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 import * as AuthService from '../../bindings/rag_project/internal/auth/service'
 import type { User } from '../../bindings/rag_project/internal/auth/models'
+import { mockStore } from '../mock/data'
 import { waitForWailsRuntime } from './settings'
 
 export type { User }
@@ -8,30 +9,19 @@ export type { User }
 export const currentUser = ref<User | null>(null)
 export const hasUsers = ref(false)
 export const authReady = ref(false)
-export const demoMode = ref(false)
 
 export const isAuthenticated = computed(() => currentUser.value !== null)
-export const isGuest = computed(() => currentUser.value?.role === 'guest')
 export const isAdmin = computed(() => currentUser.value?.role === 'admin')
 
-const demoUser: User = {
-  id: 'demo',
-  email: 'demo@rag-studio.local',
-  role: 'guest',
-  projectIds: []
-}
+/** True only before the first account exists, while setup is still allowed. */
+export const isBootstrap = computed(() => !hasUsers.value && !isAuthenticated.value)
 
-/** Enters frontend-only demo mode. No backend or configuration required. */
-export function enterDemo(): User {
-  demoMode.value = true
-  currentUser.value = { ...demoUser }
-  authReady.value = true
-  return currentUser.value
-}
-
-export function leaveDemo() {
-  demoMode.value = false
-  currentUser.value = null
+/** Project data is cached in the UI store; never carry it across accounts. */
+function resetProjectCache() {
+  mockStore.projects = []
+  mockStore.playground.selectedProjectId = ''
+  mockStore.playground.messages = {}
+  mockStore.playground.lastRetrievedChunks = {}
 }
 
 export async function initAuth(): Promise<void> {
@@ -60,6 +50,7 @@ export async function initAuth(): Promise<void> {
 export async function register(email: string, password: string): Promise<User> {
   const user = await AuthService.Register(email, password)
   if (!user) throw new Error('Registration failed')
+  resetProjectCache()
   currentUser.value = user
   hasUsers.value = true
   return user
@@ -68,12 +59,14 @@ export async function register(email: string, password: string): Promise<User> {
 export async function login(email: string, password: string): Promise<User> {
   const user = await AuthService.Login(email, password)
   if (!user) throw new Error('Invalid email or password')
+  resetProjectCache()
   currentUser.value = user
   return user
 }
 
 export async function logout(): Promise<void> {
   await AuthService.Logout()
+  resetProjectCache()
   currentUser.value = null
 }
 

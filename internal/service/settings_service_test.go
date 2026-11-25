@@ -41,7 +41,7 @@ func newTestService(t *testing.T) *SettingsService {
 		t.Fatalf("open store: %v", err)
 	}
 	t.Cleanup(func() { store.Close() })
-	return NewSettingsService(store)
+	return NewSettingsService(store, nil)
 }
 
 func TestSettingsServiceRoundTrip(t *testing.T) {

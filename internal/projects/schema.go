@@ -95,10 +95,13 @@ CREATE TABLE IF NOT EXISTS users (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email         TEXT NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
-    role          TEXT NOT NULL CHECK (role IN ('admin','user','guest')),
+    role          TEXT NOT NULL CHECK (role IN ('admin','user')),
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_check;
+ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','user'));
+DELETE FROM users WHERE role = 'guest';
 CREATE TABLE IF NOT EXISTS user_projects (
     user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     project_id UUID NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

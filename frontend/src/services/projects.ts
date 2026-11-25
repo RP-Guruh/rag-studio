@@ -17,15 +17,11 @@ import {
   addFileToProject,
   removeFileFromProject,
   trainProjectKnowledge,
-  demoProject,
-  DEMO_PROJECT_ID,
-  isDemoProject,
   type KnowledgeFile,
   type Project,
   type PersonaConfig
 } from '../mock/data'
 import { waitForWailsRuntime } from './settings'
-import { isGuest } from './auth'
 
 export type { BackendProject, BackendPersonaConfig, BackendDocument }
 export type TrainingProgress = BackendTrainingProgress
@@ -43,9 +39,6 @@ export interface ImportDocumentsResult {
 }
 
 export async function listProjects(): Promise<Project[]> {
-  if (isGuest.value) {
-    return [demoProject]
-  }
   if (!(await waitForWailsRuntime())) {
     return [...mockStore.projects]
   }
@@ -62,9 +55,6 @@ export async function listProjects(): Promise<Project[]> {
 }
 
 export async function getProject(id: string): Promise<Project | undefined> {
-  if (isDemoProject(id)) {
-    return demoProject
-  }
   if (!(await waitForWailsRuntime())) {
     return mockStore.projects.find((p) => p.id === id)
   }

@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import BaseButton from '../components/BaseButton.vue'
 import FormField from '../components/FormField.vue'
 import AppLogo from '../components/AppLogo.vue'
-import { hasUsers, register, login, enterDemo } from '../services/auth'
+import { hasUsers, register, login } from '../services/auth'
 import { t } from '../i18n'
 
 const router = useRouter()
@@ -33,11 +33,6 @@ async function submit() {
   }
 }
 
-function handleContinueAsGuest() {
-  error.value = ''
-  enterDemo()
-  router.push('/dashboard')
-}
 </script>
 
 <template>
@@ -59,20 +54,6 @@ function handleContinueAsGuest() {
       <div v-if="error" class="login-error">{{ error }}</div>
 
       <form class="login-form" @submit.prevent="submit">
-        <BaseButton
-          variant="primary"
-          type="button"
-          class="guest-login-btn"
-          @click="handleContinueAsGuest"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"></path>
-            <polyline points="10 17 15 12 10 7"></polyline>
-            <line x1="15" y1="12" x2="3" y2="12"></line>
-          </svg>
-          <span>{{ t('auth.guest') }}</span>
-        </BaseButton>
-
         <div class="divider-row">
           <span class="divider-line" />
           <span class="divider-text">{{ isRegister ? 'or create the admin account' : 'or sign in with credentials' }}</span>

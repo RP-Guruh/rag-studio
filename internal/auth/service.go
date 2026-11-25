@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 
@@ -168,6 +169,35 @@ func (s *Service) Login(email, password string) (*User, error) {
 // Logout clears the persisted session.
 func (s *Service) Logout() error {
 	return s.sessions.ClearSession()
+}
+
+// PruneInvalidSessions drops sessions that point at a deleted or removed
+// account. Guest accounts were removed in v0.1.1, so old installs can still
+// hold a guest session that would otherwise look signed in forever.
+func (s *Service) PruneInvalidSessions() {
+	if s == nil {
+		return
+	}
+	id, err := s.sessions.GetSession()
+	if err != nil || strings.TrimSpace(id) == "" {
+		return
+	}
+	if !s.databaseConfigured() {
+		_ = s.sessions.ClearSession()
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pool, err := s.pool(ctx)
+	if err != nil {
+		return
+	}
+	defer pool.Close()
+	var role string
+	err = pool.QueryRow(ctx, `SELECT role FROM users WHERE id = $1::uuid`, id).Scan(&role)
+	if err != nil || (role != RoleAdmin && role != RoleUser) {
+		_ = s.sessions.ClearSession()
+	}
 }
 
 // CurrentUser returns the signed-in account, or nil when signed out.
@@ -336,7 +366,7 @@ func (s *Service) setProjects(ctx context.Context, pool *pgxpool.Pool, userID st
 	return tx.Commit(ctx)
 }
 
-// DeleteUser removes a sub-account. Administrator and guest cannot be removed.
+// DeleteUser removes a sub-account. The administrator cannot be removed.
 func (s *Service) DeleteUser(userID string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
@@ -353,20 +383,103 @@ func (s *Service) DeleteUser(userID string) error {
 		return fmt.Errorf("load user: %w", err)
 	}
 	if role != RoleUser {
-		return errors.New("administrator and guest accounts cannot be deleted")
+		return errors.New("the administrator account cannot be deleted")
 	}
 	_, err = pool.Exec(ctx, `DELETE FROM users WHERE id = $1::uuid`, userID)
 	return err
 }
 
-// RequireManager rejects signed-out users.
-func (s *Service) RequireManager() error {
+// RequireAdmin rejects everyone except the administrator account.
+func (s *Service) RequireAdmin() error {
+	if s == nil {
+		return nil
+	}
 	user, err := s.CurrentUser()
 	if err != nil {
 		return err
 	}
 	if user == nil {
 		return errors.New("please sign in first")
+	}
+	if user.Role != RoleAdmin {
+		return errors.New("only an administrator can perform this action")
+	}
+	return nil
+}
+
+// RequireSetupOrAdmin allows configuration while the application has no
+// accounts (first-run setup) and requires an administrator afterwards. This
+// keeps the setup pages reachable before the first admin is registered without
+// leaving them open to signed-in sub-users.
+func (s *Service) RequireSetupOrAdmin() error {
+	if s == nil {
+		return nil
+	}
+	if !s.databaseConfigured() {
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	pool, err := s.pool(ctx)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+	var count int
+	if err := pool.QueryRow(ctx, `SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		// The users table does not exist until the first schema migration.
+		if pgErr, ok := err.(*pgconn.PgError); ok && pgErr.Code == "42P01" {
+			return nil
+		}
+		return fmt.Errorf("count users: %w", err)
+	}
+	if count == 0 {
+		return nil
+	}
+	return s.RequireAdmin()
+}
+
+// RequireProjectView allows read access to a project for admins and for users
+// it has been assigned to.
+func (s *Service) RequireProjectView(projectID string) error {
+	if s == nil {
+		return nil
+	}
+	user, err := s.CurrentUser()
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("please sign in first")
+	}
+	if user.Role == RoleAdmin {
+		return nil
+	}
+	for _, id := range user.ProjectIDs {
+		if id == projectID {
+			return nil
+		}
+	}
+	return errors.New("this project is not assigned to your account")
+}
+
+// RequireProjectWrite reserves project changes for the administrator.
+// Sub-users are viewers: they can read and query assigned projects but cannot
+// modify them. Introduce a separate editor role if granular write access is
+// needed later.
+func (s *Service) RequireProjectWrite(projectID string) error {
+	if s == nil {
+		return nil
+	}
+	user, err := s.CurrentUser()
+	if err != nil {
+		return err
+	}
+	if user == nil {
+		return errors.New("please sign in first")
+	}
+	if user.Role != RoleAdmin {
+		return errors.New("only an administrator can modify projects")
 	}
 	return nil
 }
@@ -407,22 +520,7 @@ func (s *Service) VisibleProjectIDs() ([]string, error) {
 	return user.ProjectIDs, nil
 }
 
-// Authorize rejects operations on projects the current user may not manage.
+// Authorize is kept as an alias for read access to a project.
 func (s *Service) Authorize(projectID string) error {
-	user, err := s.CurrentUser()
-	if err != nil {
-		return err
-	}
-	if user == nil {
-		return errors.New("please sign in first")
-	}
-	if user.Role == RoleAdmin {
-		return nil
-	}
-	for _, id := range user.ProjectIDs {
-		if id == projectID {
-			return nil
-		}
-	}
-	return errors.New("this project is not assigned to your account")
+	return s.RequireProjectView(projectID)
 }

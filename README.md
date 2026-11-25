@@ -49,7 +49,7 @@ Aset release tersedia di `https://github.com/RP-Guruh/rag-studio/releases`.
 **Debian/Ubuntu**
 
 ```bash
-sudo apt install ./rag-studio_0.1.0_amd64.deb
+sudo apt install ./rag-studio_0.1.1_amd64.deb
 rag-studio
 ```
 
@@ -57,14 +57,14 @@ Package `.deb` menarik dependensi `libgtk-4-1` dan `libwebkitgtk-6.0-4` lewat ap
 
 **Windows**
 
-Jalankan `rag-studio-0.1.0-windows-amd64-setup.exe`, lalu buka RAG Studio dari Start Menu. WebView2 biasanya sudah tersedia di Windows 10/11.
+Jalankan `rag-studio-0.1.1-windows-amd64-setup.exe`, lalu buka RAG Studio dari Start Menu. WebView2 biasanya sudah tersedia di Windows 10/11.
 
 **Arsip Linux/macOS**
 
 ```bash
 mkdir -p ~/rag-studio
 cd ~/rag-studio
-tar -xzf ~/Downloads/rag-studio-v0.1.0-linux-amd64.tar.gz
+tar -xzf ~/Downloads/rag-studio-v0.1.1-linux-amd64.tar.gz
 sudo apt install -y libgtk-4-1 libwebkitgtk-6.0-4
 chmod +x rag-studio
 ./rag-studio
@@ -72,24 +72,24 @@ chmod +x rag-studio
 
 ## First-run setup
 
-1. Buka aplikasi. Untuk mencoba, pilih **Continue as guest**. Untuk memakai data sendiri, pilih **Set up RAG Studio first**.
-2. Daftar akun pertama. Akun ini menjadi admin.
-3. Buka **Settings → Setup & health**, lalu klik **Start local stack**. Docker menjalankan `pgvector/pgvector:pg16` dan `docling-serve`.
-4. Tunggu status `PostgreSQL: ready` dan `Docling: ready`. Klik **Refresh** bila perlu.
-5. Klik **Use local preset**. Pengaturan Database dan Docling terisi otomatis.
-6. Restart aplikasi sekali agar migrasi PostgreSQL berjalan dengan konfigurasi baru.
-7. Pasang Ollama dari `ollama.com/download`, jalankan `ollama serve`, lalu tarik model:
+1. Buka aplikasi, lalu pada layar login pilih **Set up RAG Studio first (Docker, database, models)**. Halaman setup sengaja bisa dibuka sebelum ada akun.
+2. Buka **Settings → Setup & health**, lalu klik **Start local stack**. Docker menjalankan `pgvector/pgvector:pg16` dan `docling-serve`.
+3. Tunggu status `PostgreSQL: ready` dan `Docling: ready`. Klik **Refresh** bila perlu.
+4. Klik **Use local preset**. Pengaturan Database, Docling, embedding, dan chat model terisi otomatis.
+5. Restart aplikasi sekali agar migrasi PostgreSQL berjalan dengan konfigurasi baru.
+6. Pasang Ollama dari `ollama.com/download`, jalankan `ollama serve`, lalu tarik model:
 
 ```bash
 ollama pull bge-m3
 ollama pull llama3.1
 ```
 
-8. Buat project, atur tab **Persona**, lalu upload dokumen di tab **Knowledge Base**.
+7. Kembali ke layar login, lalu daftar akun pertama. Akun ini menjadi admin.
+8. Buat project lewat tombol **New project**, atur tab **Persona**, lalu upload dokumen di tab **Knowledge Base**.
 9. Klik **Train knowledge base**. Tunggu status dokumen menjadi **Ready**.
 10. Buka **Playground** dan ajukan pertanyaan. Panel kanan menampilkan retrieved chunks. Tab **Evaluation** dipakai untuk mengukur kecocokan jawaban dan sumber.
 
-Admin dapat membuat sub-user di **Settings → Users**. Setiap sub-user hanya melihat project yang diplot kepadanya.
+Admin dapat membuat sub-user di **Settings → Users** dan memilih project yang diplot kepadanya. Sub-user bersifat **read-only**: hanya melihat dan bertanya pada project yang di-assign; tidak bisa menambah/mengubah project, mengubah persona, training, maupun membuka Settings.
 
 ## Arsitektur
 
@@ -382,8 +382,8 @@ Package `.deb` ditandatangani dengan kunci rilis. Import kunci publik dan verifi
 ```bash
 gpg --import docs/rag-studio-release.gpg.key
 gpg --fingerprint 863320B6B89B26B2988B55883D8DC7AC7D242CF0
-dpkg-sig --verify rag-studio_0.1.0_amd64.deb
-gpg --verify rag-studio_0.1.0_amd64.deb.asc rag-studio_0.1.0_amd64.deb
+dpkg-sig --verify rag-studio_0.1.1_amd64.deb
+gpg --verify rag-studio_0.1.1_amd64.deb.asc rag-studio_0.1.1_amd64.deb
 ```
 
 Fingerprint: `863320B6B89B26B2988B55883D8DC7AC7D242CF0`.

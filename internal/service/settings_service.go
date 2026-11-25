@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"rag_project/internal/auth"
 	"rag_project/internal/projects"
 	"rag_project/internal/settings"
 )
@@ -17,11 +18,22 @@ import (
 // bindings.
 type SettingsService struct {
 	repository settings.Repository
+	auth       *auth.Service
 }
 
-// NewSettingsService wires a repository into a bindable service.
-func NewSettingsService(repository settings.Repository) *SettingsService {
-	return &SettingsService{repository: repository}
+// NewSettingsService wires a repository into a bindable service. A nil auth
+// service is allowed for tests and headless tooling.
+func NewSettingsService(repository settings.Repository, authService *auth.Service) *SettingsService {
+	return &SettingsService{repository: repository, auth: authService}
+}
+
+// authorize allows configuration during first-run setup and restricts it to
+// the administrator once an account exists.
+func (s *SettingsService) authorize() error {
+	if s.auth == nil {
+		return nil
+	}
+	return s.auth.RequireSetupOrAdmin()
 }
 
 // GetSettings returns every configuration section. Secrets are never
@@ -32,17 +44,26 @@ func (s *SettingsService) GetSettings() (settings.Settings, error) {
 
 // SaveChatModel validates and persists the chat model configuration.
 func (s *SettingsService) SaveChatModel(input settings.ChatModel) (settings.ChatModel, error) {
+	if err := s.authorize(); err != nil {
+		return settings.ChatModel{}, err
+	}
 	return s.repository.SaveChatModel(input)
 }
 
 // SaveEmbeddingModel validates and persists the embedding model configuration.
 func (s *SettingsService) SaveEmbeddingModel(input settings.EmbeddingModel) (settings.EmbeddingModel, error) {
+	if err := s.authorize(); err != nil {
+		return settings.EmbeddingModel{}, err
+	}
 	return s.repository.SaveEmbeddingModel(input)
 }
 
 // SaveDatabase validates and persists the PostgreSQL configuration.
 // If migrate is true, it also executes PostgreSQL table migrations.
 func (s *SettingsService) SaveDatabase(input settings.Database) (settings.Database, error, bool) {
+	if err := s.authorize(); err != nil {
+		return settings.Database{}, err, false
+	}
 	saved, err, _ := s.repository.SaveDatabase(input)
 	if err != nil {
 		return settings.Database{}, err, false
@@ -79,12 +100,18 @@ func (s *SettingsService) SaveDatabase(input settings.Database) (settings.Databa
 // SaveDocling validates and persists the Docling document-processing
 // connection.
 func (s *SettingsService) SaveDocling(input settings.DoclingConnection) (settings.DoclingConnection, error) {
+	if err := s.authorize(); err != nil {
+		return settings.DoclingConnection{}, err
+	}
 	return s.repository.SaveDocling(input)
 }
 
 // TestChatModel performs a live round-trip. An empty API key reuses the stored
 // one, which lets the user test without retyping the secret.
 func (s *SettingsService) TestChatModel(input settings.ChatModel) (settings.TestResult, error) {
+	if err := s.authorize(); err != nil {
+		return settings.TestResult{Success: false, Message: err.Error()}, nil
+	}
 	apiKey := input.APIKey
 	if apiKey == "" {
 		stored, err := s.repository.ChatModelAPIKey()
@@ -101,6 +128,9 @@ func (s *SettingsService) TestChatModel(input settings.ChatModel) (settings.Test
 // TestEmbeddingModel performs a live embedding call and verifies the vector
 // dimension.
 func (s *SettingsService) TestEmbeddingModel(input settings.EmbeddingModel) (settings.TestResult, error) {
+	if err := s.authorize(); err != nil {
+		return settings.TestResult{Success: false, Message: err.Error()}, nil
+	}
 	apiKey := input.APIKey
 	if apiKey == "" {
 		stored, err := s.repository.EmbeddingAPIKey()
@@ -116,6 +146,9 @@ func (s *SettingsService) TestEmbeddingModel(input settings.EmbeddingModel) (set
 
 // TestDatabase connects to PostgreSQL and checks for the pgvector extension.
 func (s *SettingsService) TestDatabase(input settings.Database) (settings.TestResult, error) {
+	if err := s.authorize(); err != nil {
+		return settings.TestResult{Success: false, Message: err.Error()}, nil
+	}
 	password := input.Password
 	if password == "" {
 		stored, err := s.repository.DatabasePassword()
@@ -132,6 +165,9 @@ func (s *SettingsService) TestDatabase(input settings.Database) (settings.TestRe
 // TestDocling reaches the Docling engine. In serve mode an empty API key reuses
 // the stored one; in local mode it checks the installed CLI.
 func (s *SettingsService) TestDocling(input settings.DoclingConnection) (settings.TestResult, error) {
+	if err := s.authorize(); err != nil {
+		return settings.TestResult{Success: false, Message: err.Error()}, nil
+	}
 	apiKey := input.APIKey
 	if apiKey == "" {
 		stored, err := s.repository.DoclingAPIKey()
@@ -148,6 +184,9 @@ func (s *SettingsService) TestDocling(input settings.DoclingConnection) (setting
 // BackupSettings returns the local SQLite database as base64 so the UI can
 // download a copy. Secrets stay in the OS keyring and are not included.
 func (s *SettingsService) BackupSettings() (string, error) {
+	if err := s.authorize(); err != nil {
+		return "", err
+	}
 	dir, err := os.UserConfigDir()
 	if err != nil {
 		return "", fmt.Errorf("locate config directory: %w", err)
@@ -162,6 +201,9 @@ func (s *SettingsService) BackupSettings() (string, error) {
 
 // RestoreSettings replaces the local SQLite database from a base64 backup.
 func (s *SettingsService) RestoreSettings(payload string) error {
+	if err := s.authorize(); err != nil {
+		return err
+	}
 	data, err := base64.StdEncoding.DecodeString(payload)
 	if err != nil {
 		return fmt.Errorf("invalid backup payload: %w", err)
@@ -175,20 +217,32 @@ func (s *SettingsService) RestoreSettings(payload string) error {
 
 // ChatModelAPIKey returns the stored chat API key, or an empty string.
 func (s *SettingsService) ChatModelAPIKey() (string, error) {
+	if err := s.authorize(); err != nil {
+		return "", err
+	}
 	return s.repository.ChatModelAPIKey()
 }
 
 // EmbeddingAPIKey returns the stored embedding API key, or an empty string.
 func (s *SettingsService) EmbeddingAPIKey() (string, error) {
+	if err := s.authorize(); err != nil {
+		return "", err
+	}
 	return s.repository.EmbeddingAPIKey()
 }
 
 // DatabasePassword returns the stored database password, or an empty string.
 func (s *SettingsService) DatabasePassword() (string, error) {
+	if err := s.authorize(); err != nil {
+		return "", err
+	}
 	return s.repository.DatabasePassword()
 }
 
 // DoclingAPIKey returns the stored Docling API key, or an empty string.
 func (s *SettingsService) DoclingAPIKey() (string, error) {
+	if err := s.authorize(); err != nil {
+		return "", err
+	}
 	return s.repository.DoclingAPIKey()
 }

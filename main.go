@@ -86,18 +86,18 @@ func main() {
 	}
 	defer store.Close()
 
-	migrateOnStartup(store)
-
 	authService := auth.NewService(store, store)
+	migrateOnStartup(store)
+	authService.PruneInvalidSessions()
 
 	app := application.New(application.Options{
 		Name:        "rag_project",
 		Description: "Desktop RAG Studio for Knowledge Base and Persona Management",
 		Services: []application.Service{
 			application.NewService(service.NewGreetService()),
-			application.NewService(service.NewSettingsService(store)),
-			application.NewService(update.NewService()),
-			application.NewService(stack.NewService(store)),
+			application.NewService(service.NewSettingsService(store, authService)),
+			application.NewService(update.NewService(authService)),
+			application.NewService(stack.NewService(store, authService)),
 			application.NewService(service.NewProjectService(store, training.NewManager(2), authService)),
 			application.NewService(authService),
 		},

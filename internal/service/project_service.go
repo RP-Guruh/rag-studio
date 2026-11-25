@@ -49,11 +49,20 @@ func NewProjectService(settingsRepo settings.Repository, trainer *training.Manag
 	}
 }
 
-func (s *ProjectService) authorize(projectID string) error {
+// authorizeView allows admins and users assigned to the project to read it.
+func (s *ProjectService) authorizeView(projectID string) error {
 	if s.auth == nil {
 		return nil
 	}
-	return s.auth.Authorize(projectID)
+	return s.auth.RequireProjectView(projectID)
+}
+
+// authorizeWrite reserves project mutations for the administrator.
+func (s *ProjectService) authorizeWrite(projectID string) error {
+	if s.auth == nil {
+		return nil
+	}
+	return s.auth.RequireProjectWrite(projectID)
 }
 
 func (s *ProjectService) getStore() (*projects.Store, error) {
@@ -110,7 +119,7 @@ func (s *ProjectService) ListProjects() ([]projects.Project, error) {
 }
 
 func (s *ProjectService) GetProject(id string) (*projects.Project, error) {
-	if err := s.authorize(id); err != nil {
+	if err := s.authorizeView(id); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -127,7 +136,7 @@ func (s *ProjectService) GetProject(id string) (*projects.Project, error) {
 
 func (s *ProjectService) CreateProject(name, description string) (*projects.Project, error) {
 	if s.auth != nil {
-		if err := s.auth.RequireManager(); err != nil {
+		if err := s.auth.RequireAdmin(); err != nil {
 			return nil, err
 		}
 	}
@@ -144,7 +153,7 @@ func (s *ProjectService) CreateProject(name, description string) (*projects.Proj
 }
 
 func (s *ProjectService) UpdateProject(id, name, description string) (*projects.Project, error) {
-	if err := s.authorize(id); err != nil {
+	if err := s.authorizeWrite(id); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -160,7 +169,7 @@ func (s *ProjectService) UpdateProject(id, name, description string) (*projects.
 }
 
 func (s *ProjectService) DeleteProject(id string) error {
-	if err := s.authorize(id); err != nil {
+	if err := s.authorizeWrite(id); err != nil {
 		return err
 	}
 	store, err := s.getStore()
@@ -176,7 +185,7 @@ func (s *ProjectService) DeleteProject(id string) error {
 }
 
 func (s *ProjectService) UpdatePersona(projectId string, persona projects.PersonaConfig) error {
-	if err := s.authorize(projectId); err != nil {
+	if err := s.authorizeWrite(projectId); err != nil {
 		return err
 	}
 	store, err := s.getStore()
@@ -194,7 +203,7 @@ func (s *ProjectService) UpdatePersona(projectId string, persona projects.Person
 // ImportDocuments stores uploaded files on the local disk and records their
 // metadata in PostgreSQL.
 func (s *ProjectService) ImportDocuments(projectId string, files []projects.DocumentInput) ([]projects.Document, error) {
-	if err := s.authorize(projectId); err != nil {
+	if err := s.authorizeWrite(projectId); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -211,7 +220,7 @@ func (s *ProjectService) ImportDocuments(projectId string, files []projects.Docu
 
 // DeleteDocument removes a document from PostgreSQL and deletes its local file.
 func (s *ProjectService) DeleteDocument(projectId, documentId string) error {
-	if err := s.authorize(projectId); err != nil {
+	if err := s.authorizeWrite(projectId); err != nil {
 		return err
 	}
 	store, err := s.getStore()
@@ -227,6 +236,11 @@ func (s *ProjectService) DeleteDocument(projectId, documentId string) error {
 }
 
 func (s *ProjectService) MigrateDatabase() error {
+	if s.auth != nil {
+		if err := s.auth.RequireAdmin(); err != nil {
+			return err
+		}
+	}
 	settingsData, err := s.settingsRepo.Get()
 	if err != nil {
 		return fmt.Errorf("load database settings: %w", err)
@@ -250,7 +264,7 @@ func (s *ProjectService) MigrateDatabase() error {
 // TrainProject starts chunking the project's pending documents through Docling.
 // It returns immediately and reports progress through Wails events.
 func (s *ProjectService) TrainProject(projectID string) (*training.Progress, error) {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeWrite(projectID); err != nil {
 		return nil, err
 	}
 	if status, ok := s.trainer.Status(projectID); ok && status.Running() {
@@ -353,7 +367,7 @@ func (s *ProjectService) TrainProject(projectID string) (*training.Progress, err
 
 // ReindexDocument resets a single document so only it is re-chunked and embedded.
 func (s *ProjectService) ReindexDocument(projectID, documentID string) error {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeWrite(projectID); err != nil {
 		return err
 	}
 	store, err := s.getStore()
@@ -368,7 +382,7 @@ func (s *ProjectService) ReindexDocument(projectID, documentID string) error {
 
 // CancelTraining stops an in-flight training job, if any.
 func (s *ProjectService) CancelTraining(projectID string) error {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeWrite(projectID); err != nil {
 		return err
 	}
 	s.trainer.Cancel(projectID)
@@ -412,7 +426,7 @@ func (s *ProjectService) AskProjectStream(projectID, question string) (*projects
 	if question == "" {
 		return nil, errors.New("question is required")
 	}
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return nil, err
 	}
 	all, err := s.settingsRepo.Get()
@@ -494,7 +508,7 @@ func (s *ProjectService) AskProjectStream(projectID, question string) (*projects
 
 // CancelChat stops an in-flight streaming answer for a project.
 func (s *ProjectService) CancelChat(projectID string) error {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return err
 	}
 	s.chatMu.Lock()
@@ -565,7 +579,7 @@ func (s *ProjectService) RetrieveChunks(projectID, query string, limit int) ([]p
 	if limit > 20 {
 		limit = 20
 	}
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return nil, err
 	}
 
@@ -610,7 +624,7 @@ func (s *ProjectService) AskProject(projectID, question string) (*projects.ChatA
 	if projectID == "" {
 		return nil, errors.New("project id is required")
 	}
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return nil, err
 	}
 
@@ -685,7 +699,7 @@ func (s *ProjectService) AskProject(projectID, question string) (*projects.ChatA
 
 // GetRetrievalConfig returns the retrieval settings of a project.
 func (s *ProjectService) GetRetrievalConfig(projectID string) (*projects.RetrievalConfig, error) {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -704,7 +718,7 @@ func (s *ProjectService) GetRetrievalConfig(projectID string) (*projects.Retriev
 
 // UpdateRetrievalConfig saves the retrieval settings of a project.
 func (s *ProjectService) UpdateRetrievalConfig(projectID string, cfg projects.RetrievalConfig) error {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeWrite(projectID); err != nil {
 		return err
 	}
 	store, err := s.getStore()
@@ -719,7 +733,7 @@ func (s *ProjectService) UpdateRetrievalConfig(projectID string, cfg projects.Re
 
 // CreateEvalSet adds an evaluation set to a project.
 func (s *ProjectService) CreateEvalSet(projectID, name string) (*projects.EvalSet, error) {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeWrite(projectID); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -734,7 +748,7 @@ func (s *ProjectService) CreateEvalSet(projectID, name string) (*projects.EvalSe
 
 // ListEvalSets returns evaluation sets of a project.
 func (s *ProjectService) ListEvalSets(projectID string) ([]projects.EvalSet, error) {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -753,7 +767,7 @@ func (s *ProjectService) AddEvalCase(setID, question, expectedAnswer, expectedSo
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authorize(set.ProjectID); err != nil {
+	if err := s.authorizeWrite(set.ProjectID); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -772,7 +786,7 @@ func (s *ProjectService) ListEvalCases(setID string) ([]projects.EvalCase, error
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authorize(set.ProjectID); err != nil {
+	if err := s.authorizeView(set.ProjectID); err != nil {
 		return nil, err
 	}
 	store, err := s.getStore()
@@ -791,7 +805,7 @@ func (s *ProjectService) RunEvaluation(setID string) (*projects.EvalReport, erro
 	if err != nil {
 		return nil, err
 	}
-	if err := s.authorize(set.ProjectID); err != nil {
+	if err := s.authorizeWrite(set.ProjectID); err != nil {
 		return nil, err
 	}
 	all, err := s.settingsRepo.Get()
@@ -891,7 +905,7 @@ func (s *ProjectService) getEvalSet(setID string) (*projects.EvalSet, error) {
 // BackupAll exports every project and its knowledge base as one JSON payload.
 func (s *ProjectService) BackupAll() (string, error) {
 	if s.auth != nil {
-		if err := s.auth.RequireManager(); err != nil {
+		if err := s.auth.RequireAdmin(); err != nil {
 			return "", err
 		}
 	}
@@ -945,7 +959,7 @@ func (s *ProjectService) BackupAll() (string, error) {
 // RestoreAll imports every project from a BackupAll payload.
 func (s *ProjectService) RestoreAll(payload string) error {
 	if s.auth != nil {
-		if err := s.auth.RequireManager(); err != nil {
+		if err := s.auth.RequireAdmin(); err != nil {
 			return err
 		}
 	}
@@ -980,7 +994,7 @@ func (s *ProjectService) ListPromptTemplates() ([]projects.PromptTemplate, error
 // SavePromptTemplate creates or updates a persona instruction template.
 func (s *ProjectService) SavePromptTemplate(name, instructions string) (*projects.PromptTemplate, error) {
 	if s.auth != nil {
-		if err := s.auth.RequireManager(); err != nil {
+		if err := s.auth.RequireAdmin(); err != nil {
 			return nil, err
 		}
 	}
@@ -997,7 +1011,7 @@ func (s *ProjectService) SavePromptTemplate(name, instructions string) (*project
 // ExportProject serializes a project's metadata, documents, file bytes and
 // embedded chunks into a portable JSON payload.
 func (s *ProjectService) ExportProject(projectID string) (string, error) {
-	if err := s.authorize(projectID); err != nil {
+	if err := s.authorizeView(projectID); err != nil {
 		return "", err
 	}
 	store, err := s.getStore()
@@ -1046,7 +1060,7 @@ func (s *ProjectService) ExportProject(projectID string) (string, error) {
 // ImportProject restores a project from an ExportProject payload.
 func (s *ProjectService) ImportProject(payload string) (*projects.Project, error) {
 	if s.auth != nil {
-		if err := s.auth.RequireManager(); err != nil {
+		if err := s.auth.RequireAdmin(); err != nil {
 			return nil, err
 		}
 	}

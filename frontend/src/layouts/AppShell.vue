@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { currentUser, isGuest, logout } from '../services/auth'
+import { currentUser, isAdmin, logout } from '../services/auth'
 import { useTheme } from '../utils/theme'
 import { locale, setLocale, t } from '../i18n'
 import AppLogo from '../components/AppLogo.vue'
@@ -12,12 +12,11 @@ const { isDark, toggleTheme } = useTheme()
 
 const displayName = computed(() => {
   const user = currentUser.value
-  if (!user) return 'Guest'
-  return user.role === 'guest' ? 'Guest' : user.email.split('@')[0]
+  return user ? user.email.split('@')[0] : '—'
 })
 const roleLabel = computed(() => {
   const role = currentUser.value?.role
-  return role === 'admin' ? 'Administrator' : role === 'user' ? 'Member' : 'Trial'
+  return role === 'admin' ? 'Administrator' : role === 'user' ? 'Member' : ''
 })
 const isSidebarOpen = ref(false)
 
@@ -39,6 +38,7 @@ const navItems = computed(() => [
   {
     name: t('nav.settings'),
     path: '/settings',
+    adminOnly: true,
     icon: 'M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm0 7a10 10 0 1 1 0-20 10 10 0 0 1 0 20z'
   }
 ])
@@ -76,12 +76,11 @@ async function handleSignOut() {
           <AppLogo :size="24" />
           <span class="brand-title">RAG Studio</span>
         </div>
-        <span v-if="isGuest" class="guest-badge">Demo</span>
       </div>
 
       <nav class="sidebar-nav">
         <router-link
-          v-for="item in navItems"
+          v-for="item in navItems.filter((nav) => !nav.adminOnly || isAdmin)"
           :key="item.path"
           :to="item.path"
           class="nav-link"
@@ -156,10 +155,6 @@ async function handleSignOut() {
 
     <!-- Main Content Area -->
     <main class="main-content">
-      <div v-if="isGuest" class="demo-banner">
-        <span>Demo mode — sample data. Set up services to use your own knowledge base.</span>
-        <button type="button" @click="router.push('/settings/health')">Set up RAG Studio</button>
-      </div>
       <router-view />
     </main>
   </div>
@@ -351,39 +346,6 @@ async function handleSignOut() {
   background-image:
     radial-gradient(ellipse at 80% 0%, rgba(59, 130, 246, 0.05) 0%, transparent 50%),
     radial-gradient(ellipse at 10% 100%, rgba(99, 102, 241, 0.03) 0%, transparent 40%);
-}
-
-.demo-banner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-12);
-  padding: var(--space-12) var(--space-24);
-  background-color: var(--color-accent-subtle);
-  border-bottom: 1px solid var(--color-border);
-  font-size: var(--font-size-sm);
-  color: var(--color-text-muted);
-}
-
-.demo-banner button {
-  border: 1px solid var(--color-accent);
-  border-radius: var(--radius-sm);
-  background-color: transparent;
-  color: var(--color-accent);
-  padding: var(--space-8) var(--space-12);
-  cursor: pointer;
-  font-size: var(--font-size-sm);
-}
-
-.guest-badge {
-  margin-left: var(--space-8);
-  padding: 2px var(--space-8);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  font-size: 11px;
-  color: var(--color-text-muted);
-  white-space: nowrap;
 }
 
 .mobile-nav-toggle,
