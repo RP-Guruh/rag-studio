@@ -9,7 +9,13 @@ import {
   type Settings
 } from '../../services/settings'
 import { backupAll, restoreAll } from '../../services/projects'
-import { checkForUpdate, openReleasePage, downloadLatestInstaller, type UpdateInfo } from '../../services/update'
+import {
+  checkForUpdate,
+  openReleasePage,
+  downloadLatestInstaller,
+  installUpdate,
+  type UpdateInfo
+} from '../../services/update'
 import {
   stackStatus,
   startLocalStack,
@@ -25,6 +31,7 @@ const updateInfo = ref<UpdateInfo | null>(null)
 const checking = ref(false)
 const stack = ref<StackStatus | null>(null)
 const downloadProgress = ref(0)
+const downloadedPath = ref('')
 const busyStack = ref(false)
 
 onMounted(async () => {
@@ -104,7 +111,23 @@ async function handleDownloadUpdate() {
   downloadProgress.value = 0
   try {
     const path = await downloadLatestInstaller()
-    if (path) message.value = `Installer downloaded to ${path}`
+    if (path) {
+      downloadedPath.value = path
+      message.value = `Installer downloaded to ${path}`
+    }
+  } catch (err) {
+    error.value = errorText(err)
+  }
+}
+
+async function handleInstallUpdate() {
+  if (!downloadedPath.value) return
+  error.value = ''
+  message.value = ''
+  try {
+    const result = await installUpdate(downloadedPath.value)
+    if (result.success) message.value = result.message
+    else error.value = result.message
   } catch (err) {
     error.value = errorText(err)
   }
@@ -248,6 +271,14 @@ const items = [
           @click="handleDownloadUpdate"
         >
           Download update
+        </button>
+        <button
+          v-if="downloadedPath"
+          type="button"
+          class="action-btn"
+          @click="handleInstallUpdate"
+        >
+          Install update
         </button>
       </div>
       <div v-if="downloadProgress > 0 && downloadProgress < 100" class="health-detail">

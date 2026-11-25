@@ -7,10 +7,12 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -81,6 +83,40 @@ func (s *Service) latest(ctx context.Context) (*release, error) {
 	return &result, nil
 }
 
+func normalizeVersion(value string) string {
+	return strings.TrimPrefix(strings.TrimSpace(value), "v")
+}
+
+func debInstalled() bool {
+	_, err := os.Stat("/var/lib/dpkg/info/rag-studio.list")
+	return err == nil
+}
+
+// preferredAsset picks the installer for this platform. On Debian-based Linux
+// with the .deb installed, the .deb is preferred so the package manager keeps
+// ownership of the files. Other Linux installs use the portable archive.
+func preferredAsset(assets []struct {
+	ID                 int64  `json:"id"`
+	Name               string `json:"name"`
+	BrowserDownloadURL string `json:"browser_download_url"`
+}) (int64, string, string, bool) {
+	arch := runtime.GOARCH
+	if runtime.GOOS == "linux" && debInstalled() {
+		for _, asset := range assets {
+			name := strings.ToLower(asset.Name)
+			if strings.HasSuffix(name, ".deb") && strings.Contains(name, arch) {
+				return asset.ID, asset.Name, asset.BrowserDownloadURL, true
+			}
+		}
+	}
+	for _, asset := range assets {
+		if assetMatches(asset.Name) {
+			return asset.ID, asset.Name, asset.BrowserDownloadURL, true
+		}
+	}
+	return 0, "", "", false
+}
+
 func assetMatches(name string) bool {
 	name = strings.ToLower(name)
 	if !strings.Contains(name, "rag-studio") {
@@ -102,24 +138,23 @@ func (s *Service) CheckForUpdate() (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-	version := strings.TrimPrefix(strings.TrimSpace(latest.TagName), "v")
+	current := normalizeVersion(Version)
+	version := normalizeVersion(latest.TagName)
 	url := latest.HTMLURL
 	if url == "" {
 		url = repoURL + "/releases/latest"
 	}
 	info := &Info{
-		CurrentVersion:  Version,
+		CurrentVersion:  current,
 		LatestVersion:   version,
-		UpdateAvailable: version != "" && version != Version,
+		UpdateAvailable: version != "" && version != current,
 		ReleaseURL:      url,
 		Notes:           latest.Body,
 	}
-	for _, asset := range latest.Assets {
-		if assetMatches(asset.Name) {
-			info.AssetName = asset.Name
-			info.AssetURL = asset.BrowserDownloadURL
-			break
-		}
+	_, name, assetURL, ok := preferredAsset(latest.Assets)
+	if ok {
+		info.AssetName = name
+		info.AssetURL = assetURL
 	}
 	return info, nil
 }
@@ -133,24 +168,12 @@ func (s *Service) DownloadLatestInstaller() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	var selected *struct {
-		ID   int64
-		Name string
-	}
-	for _, asset := range latest.Assets {
-		if assetMatches(asset.Name) {
-			selected = &struct {
-				ID   int64
-				Name string
-			}{ID: asset.ID, Name: asset.Name}
-			break
-		}
-	}
-	if selected == nil {
+	assetID, name, _, ok := preferredAsset(latest.Assets)
+	if !ok {
 		return "", fmt.Errorf("no installer found for %s/%s in this release", runtime.GOOS, runtime.GOARCH)
 	}
 
-	url := fmt.Sprintf("%s%d", downloadAPI, selected.ID)
+	url := fmt.Sprintf("%s%d", downloadAPI, assetID)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -177,7 +200,7 @@ func (s *Service) DownloadLatestInstaller() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	path := filepath.Join(downloads, selected.Name+"."+suffix+".part")
+	path := filepath.Join(downloads, name+"."+suffix+".part")
 	file, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_EXCL, 0o644)
 	if err != nil {
 		return "", err
@@ -194,7 +217,7 @@ func (s *Service) DownloadLatestInstaller() (string, error) {
 				return "", err
 			}
 			written += int64(n)
-			emitProgress(selected.Name, written, response.ContentLength)
+			emitProgress(name, written, response.ContentLength)
 		}
 		if readErr == io.EOF {
 			break
@@ -231,6 +254,69 @@ func emitProgress(name string, written int64, total int64) {
 	app.Event.Emit("update:progress", map[string]any{
 		"name": name, "bytes": written, "total": total, "percent": percent,
 	})
+}
+
+// InstallResult is the outcome of launching the downloaded installer.
+type InstallResult struct {
+	Success         bool   `json:"success"`
+	Message         string `json:"message"`
+	RestartRequired bool   `json:"restartRequired"`
+}
+
+// InstallUpdate starts the downloaded installer. Package managers need elevated
+// rights, so the user still confirms the system prompt. The application itself
+// cannot silently replace a running executable on Windows or macOS.
+func (s *Service) InstallUpdate(path string) (*InstallResult, error) {
+	if strings.TrimSpace(path) == "" {
+		return nil, errors.New("no downloaded installer is available")
+	}
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := os.Stat(absolute); err != nil {
+		return nil, fmt.Errorf("installer file not found: %w", err)
+	}
+
+	switch runtime.GOOS {
+	case "linux":
+		if !strings.HasSuffix(strings.ToLower(absolute), ".deb") {
+			return &InstallResult{
+				Message: "This archive cannot be installed automatically. Extract it and replace rag-studio manually: " + absolute,
+			}, nil
+		}
+		var cmd *exec.Cmd
+		if _, err := exec.LookPath("pkexec"); err == nil {
+			cmd = exec.Command("pkexec", "apt", "install", "-y", absolute)
+		} else if _, err := exec.LookPath("sudo"); err == nil {
+			cmd = exec.Command("sudo", "-n", "apt", "install", "-y", absolute)
+		} else {
+			return &InstallResult{
+				Message: "No privileged installer helper found. Run manually: sudo apt install " + absolute,
+			}, nil
+		}
+		output, err := cmd.CombinedOutput()
+		message := strings.TrimSpace(string(output))
+		if err != nil {
+			if message == "" {
+				message = err.Error()
+			}
+			return &InstallResult{Message: "Install failed: " + message}, nil
+		}
+		return &InstallResult{Success: true, Message: "Update installed. Restart RAG Studio.", RestartRequired: true}, nil
+
+	case "windows":
+		cmd := exec.Command("cmd", "/c", "start", "", "\""+absolute+"\"")
+		if err := cmd.Start(); err != nil {
+			return &InstallResult{Message: "Could not start installer: " + err.Error()}, nil
+		}
+		return &InstallResult{Success: true, Message: "Installer opened. Approve the system prompt and follow the installer.", RestartRequired: true}, nil
+
+	default:
+		return &InstallResult{
+			Message: "Open the release page and replace the application manually: " + absolute,
+		}, nil
+	}
 }
 
 // OpenReleasePage opens the release page in the default browser.

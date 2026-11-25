@@ -13,3 +13,12 @@ export interface Info {
     "assetName": string;
     "assetUrl": string;
 }
+
+/**
+ * InstallResult is the outcome of launching the downloaded installer.
+ */
+export interface InstallResult {
+    "success": boolean;
+    "message": string;
+    "restartRequired": boolean;
+}

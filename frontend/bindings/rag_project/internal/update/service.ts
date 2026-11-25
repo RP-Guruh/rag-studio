@@ -31,6 +31,15 @@ export function DownloadLatestInstaller(): $CancellablePromise<string> {
 }
 
 /**
+ * InstallUpdate starts the downloaded installer. Package managers need elevated
+ * rights, so the user still confirms the system prompt. The application itself
+ * cannot silently replace a running executable on Windows or macOS.
+ */
+export function InstallUpdate(path: string): $CancellablePromise<$models.InstallResult | null> {
+    return $Call.ByID(1422206866, path);
+}
+
+/**
  * OpenReleasePage opens the release page in the default browser.
  */
 export function OpenReleasePage(): $CancellablePromise<void> {

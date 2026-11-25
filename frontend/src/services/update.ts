@@ -25,3 +25,17 @@ export async function downloadLatestInstaller(): Promise<string> {
   if (!(await waitForWailsRuntime())) return ''
   return UpdateService.DownloadLatestInstaller()
 }
+
+export interface InstallResult {
+  success: boolean
+  message: string
+  restartRequired: boolean
+}
+
+export async function installUpdate(path: string): Promise<InstallResult> {
+  if (!(await waitForWailsRuntime())) {
+    return { success: false, message: 'Desktop runtime is not available.', restartRequired: false }
+  }
+  const result = await UpdateService.InstallUpdate(path)
+  return result || { success: false, message: 'Installer did not return a result.', restartRequired: false }
+}
